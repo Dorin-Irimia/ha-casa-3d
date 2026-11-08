@@ -1,0 +1,11 @@
+# Date personale și fișiere generate: nu ajung în repo
+esphome/secrets.yaml
+secrets.yaml
+firmware/
+personal/
+.esphome/
+*.mp4
+*.mov
+.DS_Store
+__pycache__/
+*.pyc

@@ -1,0 +1,971 @@
+# =============================================================================
+#  Senzor NTC (10 kΩ @ 25 °C, B = 3950) pe ESP32
+#  ESPHome + Home Assistant + display OLED SSD1306 128x64 (I2C)
+#
+#  Schema divizorului (vezi README.md):
+#
+#     3V3 ──[ R_serie 10 kΩ ]──┬──[ NTC 10 kΩ ]── GND
+#                              │
+#                           GPIO34 (ADC1)    (+ 100 nF între GPIO34 și GND)
+#
+#  Display-ul se configurează din Home Assistant (entitățile "Display ...")
+#  sau din panoul „Display NTC” al integrării Casa 3D (cu previzualizare).
+# =============================================================================
+
+substitutions:
+  device_name: senzor-ntc
+  friendly_name: Senzor NTC
+
+  # ---- Parametri termistor ---------------------------------------------------
+  ntc_r25: 10kOhm        # rezistența NTC la 25 °C
+  ntc_beta: "3950"       # coeficientul B (β) din datasheet
+  r_serie: 10kOhm        # rezistorul fix din divizor (măsoară-l cu multimetrul!)
+  v_ref: 3.3V            # tensiunea care alimentează divizorul
+
+  # Fereastra de tensiune considerată validă. În afara ei => "Senzor defect",
+  # temperatura devine "necunoscută" și releul se oprește.
+  #   ~3.0 V  ≈ -18 °C  (peste => NTC întrerupt / deconectat)
+  #   ~0.10 V ≈ +130 °C (sub   => NTC în scurtcircuit)
+  v_min_valid: "0.10"
+  v_max_valid: "3.00"
+
+  hist_alarma: "1.0"     # histerezis alarme (°C)
+  releu_t_min: 20s       # timp minim pornit / oprit pentru releu (protecție)
+  grafic_durata: 1h      # intervalul afișat pe pagina "Grafic"
+
+  # ---- Pini (ESP32 DevKit) ---------------------------------------------------
+  pin_ntc: GPIO34        # obligatoriu ADC1 (GPIO32..39) - ADC2 nu merge cu WiFi
+  pin_sda: GPIO21
+  pin_scl: GPIO22
+  pin_releu: GPIO26
+  pin_buton: GPIO0       # butonul BOOT de pe placă
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  comment: "Termistor NTC 10k B3950 cu display și termostat"
+  on_boot:
+    priority: -100       # după ce toate componentele sunt pornite
+    then:
+      - lambda: |-
+          id(oled).set_rotation(id(sw_intors).state ? display::DISPLAY_ROTATION_180_DEGREES
+                                                    : display::DISPLAY_ROTATION_0_DEGREES);
+      - script.execute: aplica_luminozitate
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+  encryption:
+    key: !secret senzor_ntc_api_key
+  # Acțiuni apelabile din Home Assistant (esphome.senzor_ntc_<acțiune>)
+  actions:
+    - action: afiseaza_mesaj
+      variables:
+        mesaj: string
+        durata: int
+      then:
+        - lambda: |-
+            std::string m = mesaj;
+            for (auto &c : m) if (c == '\n' || c == '\r') c = ' ';
+            int d = durata;
+            if (d < 1) d = 1;
+            if (d > 3600) d = 3600;
+            id(mesaj_text) = m;
+            id(mesaj_start) = millis();
+            id(mesaj_durata) = (uint32_t) d * 1000;
+        - script.execute: aplica_luminozitate
+        - component.update: oled
+    - action: sterge_mesaj
+      then:
+        - lambda: |-
+            id(mesaj_durata) = 0;
+            id(test_durata) = 0;
+        - script.execute: aplica_luminozitate
+        - component.update: oled
+    - action: test_display
+      variables:
+        durata: int
+      then:
+        - lambda: |-
+            int d = durata;
+            if (d < 1) d = 1;
+            if (d > 30) d = 30;
+            id(test_start) = millis();
+            id(test_durata) = (uint32_t) d * 1000;
+        - script.execute: aplica_luminozitate
+        - component.update: oled
+
+ota:
+  - platform: esphome
+    password: !secret senzor_ntc_ota_password
+    # Din ESPHome 2026.10 se poate folosi în loc: encryption: {}
+    # (aceeași cheie ca API-ul, mai puțin RAM/flash)
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "${friendly_name} Fallback"
+    password: !secret senzor_ntc_ap_password
+
+captive_portal:
+
+web_server:              # interfață web locală: http://senzor-ntc.local
+  port: 80
+  version: 3
+  ota: false             # fără upload de firmware necriptat din browser
+
+time:
+  - platform: homeassistant
+    id: ora
+    timezone: Europe/Bucharest
+
+i2c:
+  sda: ${pin_sda}
+  scl: ${pin_scl}
+  frequency: 400kHz
+
+globals:
+  - id: t_min
+    type: float
+    initial_value: "NAN"
+  - id: t_max
+    type: float
+    initial_value: "NAN"
+  - id: mesaj_text
+    type: std::string
+    initial_value: '""'
+  - id: mesaj_start
+    type: uint32_t
+    initial_value: "0"
+  - id: mesaj_durata
+    type: uint32_t
+    initial_value: "0"
+  - id: test_start
+    type: uint32_t
+    initial_value: "0"
+  - id: test_durata
+    type: uint32_t
+    initial_value: "0"
+  - id: ultima_rotire
+    type: uint32_t
+    initial_value: "0"
+  - id: noapte_activ
+    type: bool
+    initial_value: "false"
+
+# =============================================================================
+#  Lanțul de măsurare:  ADC (V)  ->  rezistență (Ω)  ->  temperatură (°C)
+# =============================================================================
+sensor:
+  - platform: adc
+    id: ntc_tensiune
+    name: "Tensiune ADC"
+    pin: ${pin_ntc}
+    attenuation: 12db
+    samples: 16                  # 16 citiri mediate la fiecare măsurare
+    update_interval: 1s
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    filters:
+      - median:                  # elimină vârfurile (zgomot WiFi)
+          window_size: 5
+          send_every: 2
+          send_first_at: 1
+
+  - platform: resistance
+    id: ntc_rezistenta
+    name: "Rezistență NTC"
+    sensor: ntc_tensiune
+    configuration: DOWNSTREAM    # NTC între pinul ADC și GND
+    resistor: ${r_serie}
+    reference_voltage: ${v_ref}
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    filters:
+      # verificare de plauzibilitate -> NAN dacă senzorul e întrerupt/scurtat
+      - lambda: |-
+          const float v = id(ntc_tensiune).state;
+          if (std::isnan(v) || v < ${v_min_valid} || v > ${v_max_valid}) return NAN;
+          return x;
+
+  - platform: ntc
+    id: temp_ntc
+    name: "Temperatură"
+    sensor: ntc_rezistenta
+    calibration:
+      b_constant: ${ntc_beta}
+      reference_temperature: 25°C
+      reference_resistance: ${ntc_r25}
+    accuracy_decimals: 1
+    filters:
+      - lambda: |-
+          if (std::isnan(x)) return NAN;
+          const float off = id(offset_calibrare).state;
+          return x + (std::isnan(off) ? 0.0f : off);
+    on_value:
+      then:
+        - lambda: |-
+            if (std::isnan(x)) return;
+            if (std::isnan(id(t_min)) || x < id(t_min)) id(t_min) = x;
+            if (std::isnan(id(t_max)) || x > id(t_max)) id(t_max) = x;
+
+  - platform: template
+    id: temp_min_ha
+    name: "Temperatură minimă"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 30s
+    lambda: return id(t_min);
+
+  - platform: template
+    id: temp_max_ha
+    name: "Temperatură maximă"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 30s
+    lambda: return id(t_max);
+
+  - platform: wifi_signal
+    id: semnal_wifi
+    name: "Semnal WiFi"
+    update_interval: 60s
+    entity_category: diagnostic
+
+  - platform: uptime
+    name: "Timp funcționare"
+    entity_category: diagnostic
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      id: adresa_ip
+      name: "Adresă IP"
+      entity_category: diagnostic
+
+# =============================================================================
+#  Setări reglabile din Home Assistant
+# =============================================================================
+number:
+  # ---- senzor / alarme ----
+  - platform: template
+    id: offset_calibrare
+    name: "Offset calibrare"
+    icon: mdi:tune-vertical
+    entity_category: config
+    unit_of_measurement: "°C"
+    mode: box
+    min_value: -10
+    max_value: 10
+    step: 0.1
+    initial_value: 0
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: prag_max
+    name: "Prag alarmă maximă"
+    icon: mdi:thermometer-high
+    entity_category: config
+    unit_of_measurement: "°C"
+    mode: box
+    min_value: -20
+    max_value: 125
+    step: 0.5
+    initial_value: 60
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: prag_min
+    name: "Prag alarmă minimă"
+    icon: mdi:thermometer-low
+    entity_category: config
+    unit_of_measurement: "°C"
+    mode: box
+    min_value: -20
+    max_value: 125
+    step: 0.5
+    initial_value: 5
+    optimistic: true
+    restore_value: true
+
+  # ---- display ----
+  - platform: template
+    id: luminozitate
+    name: "Luminozitate display"
+    icon: mdi:brightness-6
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 5
+    max_value: 100
+    step: 5
+    initial_value: 80
+    optimistic: true
+    restore_value: true
+    on_value:
+      - script.execute: aplica_luminozitate
+
+  - platform: template
+    id: nr_rotire
+    name: "Display rotire automată"
+    icon: mdi:autorenew
+    entity_category: config
+    unit_of_measurement: "s"
+    min_value: 0
+    max_value: 120
+    step: 1
+    initial_value: 0
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: nr_noapte_start
+    name: "Display noapte de la ora"
+    icon: mdi:weather-night
+    entity_category: config
+    unit_of_measurement: "h"
+    mode: box
+    min_value: 0
+    max_value: 23
+    step: 1
+    initial_value: 22
+    optimistic: true
+    restore_value: true
+    on_value:
+      - script.execute: aplica_luminozitate
+
+  - platform: template
+    id: nr_noapte_stop
+    name: "Display noapte până la ora"
+    icon: mdi:weather-sunset-up
+    entity_category: config
+    unit_of_measurement: "h"
+    mode: box
+    min_value: 0
+    max_value: 23
+    step: 1
+    initial_value: 7
+    optimistic: true
+    restore_value: true
+    on_value:
+      - script.execute: aplica_luminozitate
+
+  - platform: template
+    id: nr_lum_noapte
+    name: "Display luminozitate noapte"
+    icon: mdi:brightness-4
+    entity_category: config
+    unit_of_measurement: "%"
+    min_value: 0                 # 0 = display stins noaptea
+    max_value: 100
+    step: 5
+    initial_value: 10
+    optimistic: true
+    restore_value: true
+    on_value:
+      - script.execute: aplica_luminozitate
+
+text:
+  - platform: template
+    id: txt_titlu
+    name: "Display titlu"
+    icon: mdi:format-title
+    entity_category: config
+    mode: text
+    max_length: 12
+    initial_value: "NTC"
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: txt_jos
+    name: "Display text personalizat"
+    icon: mdi:form-textbox
+    entity_category: config
+    mode: text
+    max_length: 20
+    initial_value: "Salut!"
+    optimistic: true
+    restore_value: true
+
+select:
+  - platform: template
+    id: sel_colt
+    name: "Display colț dreapta"
+    icon: mdi:page-layout-header
+    entity_category: config
+    options: ["Ora", "Data", "Semnal WiFi", "Adresă IP", "Nimic"]
+    initial_option: "Ora"
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: sel_format
+    name: "Display format temperatură"
+    icon: mdi:thermometer
+    entity_category: config
+    options: ["23.4 °C", "23 °C", "74.1 °F", "74 °F"]
+    initial_option: "23.4 °C"
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: sel_jos
+    name: "Display rând jos"
+    icon: mdi:page-layout-footer
+    entity_category: config
+    options:
+      - "Țintă termostat"
+      - "Minim … maxim"
+      - "Praguri alarmă"
+      - "Rezistență"
+      - "Text personalizat"
+      - "Nimic"
+    initial_option: "Țintă termostat"
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: sel_indicator
+    name: "Display indicator"
+    icon: mdi:toggle-switch-outline
+    entity_category: config
+    options: ["Stare releu", "Semnal WiFi", "Nimic"]
+    initial_option: "Stare releu"
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: sel_pagini
+    name: "Display pagini în rotație"
+    icon: mdi:book-open-page-variant
+    entity_category: config
+    options:
+      - "Doar principală"
+      - "Principală + detalii"
+      - "Principală + grafic"
+      - "Toate"
+    initial_option: "Toate"
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: sel_pagina
+    name: "Display pagina curentă"
+    icon: mdi:page-next-outline
+    options: ["Principală", "Detalii", "Grafic"]
+    initial_option: "Principală"
+    optimistic: true
+    on_value:
+      - lambda: id(ultima_rotire) = millis();
+      - component.update: oled
+
+switch:
+  - platform: gpio
+    id: releu
+    name: "Releu"
+    pin: ${pin_releu}
+    restore_mode: ALWAYS_OFF
+    internal: true             # comandat doar de termostat
+
+  - platform: template
+    id: display_pornit
+    name: "Display"
+    icon: mdi:monitor
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    on_turn_on:
+      - script.execute: aplica_luminozitate
+    on_turn_off:
+      - script.execute: aplica_luminozitate
+
+  - platform: template
+    id: sw_intors
+    name: "Display întors"
+    icon: mdi:screen-rotation
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_turn_on:
+      - lambda: id(oled).set_rotation(display::DISPLAY_ROTATION_180_DEGREES);
+      - component.update: oled
+    on_turn_off:
+      - lambda: id(oled).set_rotation(display::DISPLAY_ROTATION_0_DEGREES);
+      - component.update: oled
+
+  - platform: template
+    id: sw_noapte
+    name: "Display mod noapte"
+    icon: mdi:weather-night
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_turn_on:
+      - script.execute: aplica_luminozitate
+    on_turn_off:
+      - script.execute: aplica_luminozitate
+
+  - platform: template
+    id: oprire_la_alarma
+    name: "Oprire termostat la alarmă maximă"
+    icon: mdi:shield-alert
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+button:
+  - platform: template
+    id: reset_minmax
+    name: "Resetare minim și maxim"
+    icon: mdi:restore
+    on_press:
+      - lambda: |-
+          id(t_min) = id(temp_ntc).state;
+          id(t_max) = id(temp_ntc).state;
+      - component.update: temp_min_ha
+      - component.update: temp_max_ha
+
+  - platform: restart
+    name: "Repornire"
+
+# =============================================================================
+#  Alarme, stare senzor, buton fizic
+# =============================================================================
+binary_sensor:
+  - platform: status
+    id: stare_ha
+    name: "Stare"
+
+  - platform: template
+    id: senzor_defect
+    name: "Defect senzor"
+    device_class: problem
+    entity_category: diagnostic
+    lambda: return std::isnan(id(ntc_rezistenta).state);
+    filters:
+      - delayed_on: 6s         # ignoră pornirea (încă nu există citiri)
+    on_press:
+      - switch.turn_off: releu
+      - logger.log:
+          level: WARN
+          format: "Senzor NTC defect (tensiune %.3f V) - releu oprit"
+          args: ["id(ntc_tensiune).state"]
+
+  - platform: template
+    id: alarma_max
+    name: "Alarmă temperatură maximă"
+    device_class: heat
+    lambda: |-
+      const float t = id(temp_ntc).state;
+      if (std::isnan(t)) return {};
+      if (t >= id(prag_max).state) return true;
+      if (t <= id(prag_max).state - ${hist_alarma}) return false;
+      return {};               // în banda de histerezis: păstrează starea
+    on_press:
+      - if:
+          condition:
+            switch.is_on: oprire_la_alarma
+          then:
+            - climate.control:
+                id: termostat
+                mode: "OFF"
+            - switch.turn_off: releu
+            - logger.log:
+                level: WARN
+                format: "Alarmă maximă: termostat oprit"
+
+  - platform: template
+    id: alarma_min
+    name: "Alarmă temperatură minimă"
+    device_class: cold
+    lambda: |-
+      const float t = id(temp_ntc).state;
+      if (std::isnan(t)) return {};
+      if (t <= id(prag_min).state) return true;
+      if (t >= id(prag_min).state + ${hist_alarma}) return false;
+      return {};
+
+  - platform: template
+    id: bs_noapte
+    name: "Display mod noapte activ"
+    icon: mdi:weather-night
+    entity_category: diagnostic
+    lambda: return id(noapte_activ);
+
+  - platform: gpio
+    id: buton
+    pin:
+      number: ${pin_buton}
+      mode: INPUT_PULLUP
+      inverted: true
+      ignore_strapping_warning: true
+    internal: true
+    on_click:
+      # apăsare scurtă -> pagina următoare (sau închide mesajul afișat)
+      - min_length: 30ms
+        max_length: 800ms
+        then:
+          - if:
+              condition:
+                lambda: return millis() - id(mesaj_start) < id(mesaj_durata);
+              then:
+                - lambda: id(mesaj_durata) = 0;
+                - script.execute: aplica_luminozitate
+                - component.update: oled
+              else:
+                - script.execute: pagina_urmatoare
+      # apăsare lungă (2-6 s) -> resetare min/max
+      - min_length: 2s
+        max_length: 6s
+        then:
+          - button.press: reset_minmax
+
+# =============================================================================
+#  Scripturi și temporizări pentru display
+# =============================================================================
+script:
+  # Trece la următoarea pagină activă (conform "Display pagini în rotație")
+  - id: pagina_urmatoare
+    then:
+      - lambda: |-
+          const int set = id(sel_pagini).active_index().value_or(0);
+          const bool detalii = (set == 1 || set == 3);
+          const bool grafic  = (set == 2 || set == 3);
+          int p = id(sel_pagina).active_index().value_or(0);
+          for (int k = 1; k <= 3; k++) {
+            const int n = (p + k) % 3;
+            if (n == 0 || (n == 1 && detalii) || (n == 2 && grafic)) { p = n; break; }
+          }
+          id(ultima_rotire) = millis();
+          auto call = id(sel_pagina).make_call();
+          call.set_index(p);
+          call.perform();
+
+  # Pornit/stins, contrast normal sau de noapte; un mesaj aprinde display-ul
+  - id: aplica_luminozitate
+    then:
+      - lambda: |-
+          bool noapte = false;
+          if (id(sw_noapte).state) {
+            auto acum = id(ora).now();
+            const int a = (int) id(nr_noapte_start).state;
+            const int b = (int) id(nr_noapte_stop).state;
+            if (acum.is_valid() && a != b) {
+              const int h = acum.hour;
+              noapte = (a < b) ? (h >= a && h < b) : (h >= a || h < b);
+            }
+          }
+          id(noapte_activ) = noapte;
+
+          float lum = noapte ? id(nr_lum_noapte).state : id(luminozitate).state;
+          if (std::isnan(lum)) lum = 80;
+          bool pornit = id(display_pornit).state && lum > 0;
+
+          const uint32_t acum_ms = millis();
+          const bool forteaza = (acum_ms - id(mesaj_start) < id(mesaj_durata)) ||
+                                (acum_ms - id(test_start) < id(test_durata));
+          if (forteaza) {
+            pornit = true;
+            if (lum < 30) lum = 100;
+          }
+
+          if (!pornit) {
+            if (id(oled).is_on()) id(oled).turn_off();
+            return;
+          }
+          if (!id(oled).is_on()) id(oled).turn_on();
+          id(oled).set_contrast(lum / 100.0f);
+
+interval:
+  # rotire automată a paginilor
+  - interval: 1s
+    then:
+      - lambda: |-
+          const float per = id(nr_rotire).state;
+          if (std::isnan(per) || per < 1) return;
+          if (id(sel_pagini).active_index().value_or(0) == 0 &&
+              id(sel_pagina).active_index().value_or(0) == 0) return;
+          if (millis() - id(ultima_rotire) >= (uint32_t) (per * 1000.0f))
+            id(pagina_urmatoare).execute();
+
+  # fereastra de noapte + revenire după mesaje
+  - interval: 5s
+    then:
+      - script.execute: aplica_luminozitate
+
+# =============================================================================
+#  Termostat (încălzire) - apare în HA ca entitate "climate"
+#  Pentru RĂCIRE: înlocuiește heat_action cu cool_action, min_heating_* cu
+#  min_cooling_* și default_target_temperature_low cu ..._high.
+# =============================================================================
+climate:
+  - platform: thermostat
+    id: termostat
+    name: "Termostat"
+    sensor: temp_ntc
+    default_preset: Normal
+    preset:
+      - name: Normal
+        default_target_temperature_low: 40 °C
+      - name: Eco
+        default_target_temperature_low: 30 °C
+    heat_deadband: 0.5 °C      # pornește la țintă - 0.5
+    heat_overrun: 0.5 °C       # se oprește la țintă + 0.5
+    min_heating_off_time: ${releu_t_min}
+    min_heating_run_time: ${releu_t_min}
+    min_idle_time: ${releu_t_min}
+    heat_action:
+      - switch.turn_on: releu
+    idle_action:
+      - switch.turn_off: releu
+    visual:
+      min_temperature: 0 °C
+      max_temperature: 100 °C
+      temperature_step:
+        target_temperature: 0.5
+        current_temperature: 0.1
+
+# =============================================================================
+#  Display OLED SSD1306 128x64
+#  ATENȚIE: dacă modifici fonturile sau lambda-ul de mai jos, preview-ul din
+#  ntc-display.html nu se mai potrivește (vezi tools/genereaza-fonturi.py).
+# =============================================================================
+graph:
+  - id: grafic_temp
+    duration: ${grafic_durata}
+    width: 128
+    height: 49
+    x_grid: 10min
+    y_grid: 1.0
+    border: true
+    traces:
+      - sensor: temp_ntc
+        continuous: true
+
+font:
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
+    id: f_mare
+    size: 28
+    glyphs: "0123456789.-°CF"
+
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
+    id: f_mediu
+    size: 14
+    glyphs: ' !"#%&''()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]_abcdefghijklmnopqrstuvwxyz°…ĂÂÎȘȚăâîșțŞşŢţΩ'
+
+  - file:
+      type: gfonts
+      family: Roboto
+    id: f_mic
+    size: 10
+    glyphs: ' !"#%&''()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]_abcdefghijklmnopqrstuvwxyz°…ĂÂÎȘȚăâîșțŞşŢţΩ'
+
+display:
+  - platform: ssd1306_i2c
+    id: oled
+    model: "SSD1306 128x64"
+    address: 0x3C
+    update_interval: 1s
+    lambda: |-
+      const uint32_t acum_ms = millis();
+      const bool clipeste = (acum_ms / 500) % 2;
+      const float t = id(temp_ntc).state;
+      const int fmt = id(sel_format).active_index().value_or(0);
+      const bool fahr = fmt >= 2;
+      const int zec = (fmt % 2 == 0) ? 1 : 0;
+      const char *u = fahr ? "°F" : "°C";
+      auto conv = [fahr](float c) -> float { return fahr ? c * 9.0f / 5.0f + 32.0f : c; };
+      char buf[64];
+
+      // ================= test pixeli =================
+      if (acum_ms - id(test_start) < id(test_durata)) {
+        it.fill(COLOR_ON);
+        return;
+      }
+
+      // ================= mesaj trimis din Home Assistant =================
+      if (acum_ms - id(mesaj_start) < id(mesaj_durata)) {
+        it.rectangle(0, 0, 128, 64);
+        std::vector<std::string> linii;
+        std::string linie;
+        const std::string &m = id(mesaj_text);
+        size_t i = 0;
+        while (i <= m.size()) {
+          size_t j = m.find(' ', i);
+          if (j == std::string::npos) j = m.size();
+          const std::string cuv = m.substr(i, j - i);
+          const std::string proba = linie.empty() ? cuv : linie + " " + cuv;
+          int x1, y1, w, h;
+          it.get_text_bounds(0, 0, proba.c_str(), id(f_mediu), TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
+          if (!linie.empty() && w > 120) {
+            linii.push_back(linie);
+            linie = cuv;
+          } else {
+            linie = proba;
+          }
+          i = j + 1;
+        }
+        if (!linie.empty()) linii.push_back(linie);
+        if (linii.size() > 3) linii.resize(3);
+        const int y0 = 32 - (int) linii.size() * 8;
+        for (size_t k = 0; k < linii.size(); k++)
+          it.print(64, y0 + (int) k * 16, id(f_mediu), TextAlign::TOP_CENTER, linii[k].c_str());
+        return;
+      }
+
+      // ================= bara de sus =================
+      const char *titlu = id(txt_titlu).state.c_str();
+      it.print(0, 0, id(f_mic), titlu);
+      {
+        int x1, y1, w, h;
+        it.get_text_bounds(0, 0, titlu, id(f_mic), TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
+        if (id(stare_ha).state) it.filled_circle(w + 6, 6, 3);
+        else                    it.circle(w + 6, 6, 3);
+      }
+      auto acum = id(ora).now();
+      switch (id(sel_colt).active_index().value_or(0)) {
+        case 0:
+          if (acum.is_valid()) it.strftime(127, 0, id(f_mic), TextAlign::TOP_RIGHT, "%H:%M", acum);
+          break;
+        case 1:
+          if (acum.is_valid()) it.strftime(127, 0, id(f_mic), TextAlign::TOP_RIGHT, "%d.%m.%Y", acum);
+          break;
+        case 2:
+          if (!std::isnan(id(semnal_wifi).state))
+            it.printf(127, 0, id(f_mic), TextAlign::TOP_RIGHT, "%.0f dBm", id(semnal_wifi).state);
+          break;
+        case 3:
+          it.print(127, 0, id(f_mic), TextAlign::TOP_RIGHT, id(adresa_ip).state.c_str());
+          break;
+        default:
+          break;
+      }
+      it.line(0, 13, 127, 13);
+
+      // ================= senzor defect =================
+      if (id(senzor_defect).state) {
+        if (clipeste) it.print(64, 30, id(f_mediu), TextAlign::CENTER, "EROARE SENZOR");
+        it.printf(64, 48, id(f_mic), TextAlign::CENTER, "Verifică NTC (%.2f V)", id(ntc_tensiune).state);
+        return;
+      }
+
+      const int pagina = id(sel_pagina).active_index().value_or(0);
+
+      if (pagina == 1) {
+        // ================= PAGINA DETALII =================
+        const float r = id(ntc_rezistenta).state;
+        float off = id(offset_calibrare).state;
+        if (std::isnan(off)) off = 0;
+
+        if (std::isnan(id(t_min))) it.print(0, 15, id(f_mic), "Min: --");
+        else it.printf(0, 15, id(f_mic), "Min: %.1f%s", conv(id(t_min)), u);
+        if (std::isnan(id(t_max))) it.print(0, 27, id(f_mic), "Max: --");
+        else it.printf(0, 27, id(f_mic), "Max: %.1f%s", conv(id(t_max)), u);
+        if (std::isnan(r)) it.print(0, 39, id(f_mic), "R: --");
+        else it.printf(0, 39, id(f_mic), "R: %.2f kΩ", r / 1000.0f);
+        it.printf(0, 51, id(f_mic), "U: %.3f V", id(ntc_tensiune).state);
+
+        it.printf(127, 15, id(f_mic), TextAlign::TOP_RIGHT, "Ofs %+.1f", fahr ? off * 1.8f : off);
+        it.printf(127, 27, id(f_mic), TextAlign::TOP_RIGHT, "%.0f dBm", id(semnal_wifi).state);
+        it.printf(127, 39, id(f_mic), TextAlign::TOP_RIGHT, "Max %.0f°", conv(id(prag_max).state));
+        it.printf(127, 51, id(f_mic), TextAlign::TOP_RIGHT, "Min %.0f°", conv(id(prag_min).state));
+        return;
+      }
+
+      if (pagina == 2) {
+        // ================= PAGINA GRAFIC =================
+        it.graph(0, 15, id(grafic_temp));
+        const float gmax = id(grafic_temp).get_graph_limit_max();
+        const float gmin = id(grafic_temp).get_graph_limit_min();
+        int x1, y1, w, h;
+        if (!std::isnan(gmax)) {
+          snprintf(buf, sizeof(buf), "%.0f", conv(gmax));
+          it.get_text_bounds(2, 16, buf, id(f_mic), TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
+          it.filled_rectangle(x1 - 1, y1, w + 2, h, COLOR_OFF);
+          it.print(2, 16, id(f_mic), buf);
+        }
+        if (!std::isnan(gmin)) {
+          snprintf(buf, sizeof(buf), "%.0f", conv(gmin));
+          it.get_text_bounds(2, 62, buf, id(f_mic), TextAlign::BOTTOM_LEFT, &x1, &y1, &w, &h);
+          it.filled_rectangle(x1 - 1, y1, w + 2, h, COLOR_OFF);
+          it.print(2, 62, id(f_mic), TextAlign::BOTTOM_LEFT, buf);
+        }
+        if (!std::isnan(t)) {
+          snprintf(buf, sizeof(buf), "%.*f%s", zec, conv(t), u);
+          it.get_text_bounds(125, 16, buf, id(f_mic), TextAlign::TOP_RIGHT, &x1, &y1, &w, &h);
+          it.filled_rectangle(x1 - 1, y1, w + 2, h, COLOR_OFF);
+          it.print(125, 16, id(f_mic), TextAlign::TOP_RIGHT, buf);
+        }
+        return;
+      }
+
+      // ================= PAGINA PRINCIPALĂ =================
+      if (std::isnan(t)) snprintf(buf, sizeof(buf), "--.-");
+      else snprintf(buf, sizeof(buf), "%.*f%s", zec, conv(t), u);
+      it.print(64, 33, id(f_mare), TextAlign::CENTER, buf);
+
+      if (id(alarma_max).state) {
+        if (clipeste) it.print(0, 63, id(f_mic), TextAlign::BOTTOM_LEFT, "! ALARMĂ MAXIMĂ");
+      } else if (id(alarma_min).state) {
+        if (clipeste) it.print(0, 63, id(f_mic), TextAlign::BOTTOM_LEFT, "! ALARMĂ MINIMĂ");
+      } else {
+        buf[0] = '\0';
+        switch (id(sel_jos).active_index().value_or(0)) {
+          case 0:
+            if (id(termostat).mode == climate::CLIMATE_MODE_OFF) snprintf(buf, sizeof(buf), "Termostat oprit");
+            else snprintf(buf, sizeof(buf), "Țintă %.1f%s", conv(id(termostat).target_temperature), u);
+            break;
+          case 1:
+            if (!std::isnan(id(t_min)))
+              snprintf(buf, sizeof(buf), "%.1f … %.1f%s", conv(id(t_min)), conv(id(t_max)), u);
+            break;
+          case 2:
+            snprintf(buf, sizeof(buf), "Alarme %.0f / %.0f%s", conv(id(prag_min).state), conv(id(prag_max).state), u);
+            break;
+          case 3:
+            if (!std::isnan(id(ntc_rezistenta).state))
+              snprintf(buf, sizeof(buf), "R %.2f kΩ", id(ntc_rezistenta).state / 1000.0f);
+            break;
+          case 4:
+            snprintf(buf, sizeof(buf), "%s", id(txt_jos).state.c_str());
+            break;
+          default:
+            break;
+        }
+        it.print(0, 63, id(f_mic), TextAlign::BOTTOM_LEFT, buf);
+      }
+
+      switch (id(sel_indicator).active_index().value_or(0)) {
+        case 0:
+          if (id(releu).state) {
+            it.filled_rectangle(98, 52, 30, 12);
+            it.print(113, 58, id(f_mic), COLOR_OFF, TextAlign::CENTER, "ON");
+          } else {
+            it.rectangle(98, 52, 30, 12);
+            it.print(113, 58, id(f_mic), TextAlign::CENTER, "OFF");
+          }
+          break;
+        case 1:
+          if (!std::isnan(id(semnal_wifi).state))
+            it.printf(127, 63, id(f_mic), TextAlign::BOTTOM_RIGHT, "%.0f dBm", id(semnal_wifi).state);
+          break;
+        default:
+          break;
+      }

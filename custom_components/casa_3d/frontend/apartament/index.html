@@ -1,0 +1,1936 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Casa 3D</title>
+<style>
+:root {
+  --bg: #e9edf2; --card: rgba(255,255,255,.94); --solid: #ffffff; --ink: #1b1e23; --muted: #5d6571; --line: #dfe3e8; --soft: #f3f5f8;
+  --accent: #0288d1; --accent-ink: #fff; --ok: #2e7d32; --ok-soft: #e5f3e6; --warn: #b45309; --warn-soft: #fdf0dc;
+  --bad: #c62828; --bad-soft: #fbe5e5; --shadow: 0 4px 18px rgba(16,24,40,.12);
+  --scene-top: #f4f6f9; --scene-bottom: #d9dfe6; --plan-bg: #eef1f5; --grid: rgba(20,30,50,.07); --grid2: rgba(20,30,50,.14); --wall: #4b525c;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216; --card: rgba(24,28,33,.94); --solid: #181c21; --ink: #e7e9ec; --muted: #9aa3ae; --line: #2a3037; --soft: #1f242a;
+    --accent: #4fc3f7; --accent-ink: #04202c; --ok: #81c784; --ok-soft: #18301b; --warn: #fbbf24; --warn-soft: #3a2b0b;
+    --bad: #ef9a9a; --bad-soft: #3b1717; --shadow: 0 4px 18px rgba(0,0,0,.45);
+    --scene-top: #1a1f26; --scene-bottom: #0d1014; --plan-bg: #12161b; --grid: rgba(255,255,255,.05); --grid2: rgba(255,255,255,.11); --wall: #c9ced6;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1216; --card: rgba(24,28,33,.94); --solid: #181c21; --ink: #e7e9ec; --muted: #9aa3ae; --line: #2a3037; --soft: #1f242a;
+  --accent: #4fc3f7; --accent-ink: #04202c; --ok: #81c784; --ok-soft: #18301b; --warn: #fbbf24; --warn-soft: #3a2b0b;
+  --bad: #ef9a9a; --bad-soft: #3b1717; --shadow: 0 4px 18px rgba(0,0,0,.45);
+  --scene-top: #1a1f26; --scene-bottom: #0d1014; --plan-bg: #12161b; --grid: rgba(255,255,255,.05); --grid2: rgba(255,255,255,.11); --wall: #c9ced6;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+#scene { position: fixed; inset: 0; background: linear-gradient(var(--scene-top), var(--scene-bottom)); }
+#scene canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+#labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+#plan { position: fixed; inset: 0; width: 100%; height: 100%; display: none; background: var(--plan-bg); touch-action: none; cursor: default; }
+body.ed2d #plan { display: block; }
+body.ed2d #labels { display: none; }
+
+.lbl { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); pointer-events: auto; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; padding: 3px 8px 3px 6px; border-radius: 999px;
+  background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); font-size: 12px; line-height: 1.2;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); user-select: none; }
+.lbl .ic { width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--soft); color: var(--muted); }
+.lbl .ic svg { width: 12px; height: 12px; }
+.lbl b { font-weight: 600; }
+.lbl small { color: var(--muted); font-variant-numeric: tabular-nums; }
+.lbl small:empty { display: none; }
+.lbl.on .ic { background: #ffcc4d; color: #4a3500; }
+.lbl.hot .ic { background: #ff8a65; color: #3d0f00; }
+.lbl.alert { border-color: var(--bad); }
+.lbl.alert .ic { background: var(--bad); color: #fff; }
+.lbl.off-line { opacity: .55; }
+.lbl.missing { opacity: .45; border-style: dashed; }
+.lbl.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lbl.compact b, .lbl.compact small { display: none; }
+.lbl.compact { padding: 3px; }
+.room-lbl { position: absolute; transform: translate(-50%, -50%); font-size: 11px; font-weight: 650; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted); text-shadow: 0 1px 0 var(--bg); white-space: nowrap; pointer-events: none; }
+.room-lbl span { display: block; text-align: center; font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--ink); font-weight: 600; }
+
+.ui { position: fixed; z-index: 2; }
+.panelish { background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.topbar { top: 12px; left: 12px; right: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; pointer-events: none; }
+.topbar > * { pointer-events: auto; }
+.title { padding: 8px 12px; display: flex; align-items: center; gap: 10px; }
+.title h1 { font-size: 16px; margin: 0; font-weight: 650; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; font-size: 12px; color: var(--muted); background: var(--soft); }
+.pill .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.ok { color: var(--ok); background: var(--ok-soft); } .pill.warn { color: var(--warn); background: var(--warn-soft); } .pill.bad { color: var(--bad); background: var(--bad-soft); }
+.tools { padding: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--soft); }
+.seg button { border: 0; background: transparent; padding: 5px 10px; border-radius: 7px; cursor: pointer; color: var(--muted); font-size: 13px; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--solid); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.tg { border: 1px solid var(--line); background: transparent; padding: 5px 10px; border-radius: 9px; cursor: pointer; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.tg[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.tg:disabled { opacity: .45; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+body.editing .viewtools { display: none !important; }
+
+.summary { left: 12px; bottom: 12px; padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 24px); }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--soft); font-size: 12.5px; white-space: nowrap; }
+.chip b { font-variant-numeric: tabular-nums; }
+.hint { right: 12px; bottom: 12px; padding: 6px 10px; font-size: 12px; color: var(--muted); }
+body.editing .summary, body.editing .hint { display: none; }
+
+.side { top: 70px; right: 12px; width: 330px; max-height: calc(100% - 140px); overflow: auto; padding: 14px; display: none; }
+.side.show { display: block; }
+body.editing .side { right: auto; left: 12px; top: 132px; }
+.side h2 { margin: 0 0 2px; font-size: 16px; padding-right: 28px; }
+.meta { color: var(--muted); font-size: 12px; margin-bottom: 10px; overflow-wrap: anywhere; }
+.big { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.row .v { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+.close { position: absolute; top: 8px; right: 8px; border: 0; background: transparent; font-size: 20px; cursor: pointer; color: var(--muted); width: 32px; height: 32px; border-radius: 8px; }
+.close:hover { background: var(--soft); }
+.btn { border: 1px solid var(--line); background: var(--solid); padding: 6px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap; text-decoration: none; color: inherit; display: inline-block; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+.btn.danger { color: var(--bad); }
+.btn.sm { padding: 3px 9px; font-size: 13px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btns { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.spark { width: 100%; height: 70px; display: block; margin-top: 8px; }
+.devlist { list-style: none; margin: 0; padding: 0; }
+.devlist li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.devlist li:first-child { border-top: 0; }
+.devlist .st { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+.note { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+
+/* ---------- editor ---------- */
+.edbar { top: 70px; left: 12px; right: 396px; padding: 6px; display: none; flex-wrap: wrap; gap: 6px; align-items: center; }
+body.editing .edbar { display: flex; }
+.edbar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 2px; }
+.edbar select { padding: 4px 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--solid); font-size: 13px; }
+.edpanel { top: 70px; right: 12px; bottom: 12px; width: 372px; overflow: auto; padding: 14px; display: none; }
+body.editing .edpanel { display: block; }
+.edpanel h2 { font-size: 15px; margin: 0 0 4px; }
+.edpanel h3 { font-size: 12px; margin: 16px 0 6px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.fld { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 4px 10px; align-items: center; margin: 6px 0; }
+.fld > label { font-size: 13px; color: var(--muted); }
+.fld input[type=text], .fld input[type=number], .fld select, .tbl input[type=text], .tbl input[type=number], .tbl select {
+  width: 100%; min-width: 0; padding: 5px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--solid); font-size: 13px; }
+.fld input[type=color] { width: 44px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 7px; background: none; }
+.fld .inl { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.fld .inl input[type=number] { width: 80px; flex: none; }
+.help { font-size: 12px; color: var(--muted); margin: 4px 0 8px; }
+.help code { background: var(--soft); padding: 0 4px; border-radius: 4px; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tbl td, .tbl th { padding: 3px 2px; vertical-align: middle; }
+.tbl th { color: var(--muted); font-weight: 600; text-align: left; font-size: 11px; }
+.tbl input[type=color] { width: 30px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; }
+.tbl .x { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0 3px; }
+.ellist { list-style: none; padding: 0; margin: 0; max-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.ellist li { padding: 5px 8px; border-top: 1px solid var(--line); cursor: pointer; display: flex; justify-content: space-between; gap: 6px; font-size: 13px; }
+.ellist li:first-child { border-top: 0; }
+.ellist li:hover { background: var(--soft); }
+.ellist small { color: var(--muted); }
+.savestate { font-size: 12px; color: var(--muted); }
+.savestate.dirty { color: var(--warn); font-weight: 600; }
+
+.welcome { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; padding: 16px; background: rgba(10,12,16,.45); }
+.welcome[hidden] { display: none; }
+.wbox { width: min(520px, 100%); padding: 20px; max-height: calc(100% - 32px); overflow: auto; }
+.wbox h2 { margin: 0 0 6px; font-size: 20px; }
+.wbox p { margin: 0 0 14px; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.wopts { display: grid; gap: 8px; margin-bottom: 14px; }
+.wopts button { text-align: left; border: 1px solid var(--line); background: var(--solid); color: inherit; border-radius: 12px; padding: 12px 14px; cursor: pointer; font: inherit; }
+.wopts button:hover, .wopts button:focus-visible { border-color: var(--accent); }
+.wopts b { display: block; font-size: 15px; margin-bottom: 2px; }
+.wopts small { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.wnote { font-size: 12px; color: var(--warn); margin: -6px 0 12px; }
+.toast { position: fixed; left: 50%; bottom: 70px; transform: translate(-50%, 10px); opacity: 0; pointer-events: none; z-index: 9;
+  background: var(--ink); color: var(--solid); padding: 9px 14px; border-radius: 10px; font-size: 13px; transition: all .2s; max-width: calc(100% - 32px); }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.bad { background: var(--bad); color: #fff; }
+@media (max-width: 760px) {
+  .tools { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
+  .tools > * { flex: none; }
+  .side { left: 8px; right: 8px; width: auto; top: auto; bottom: 8px; max-height: 55%; }
+  .hint { display: none; }
+  .summary { bottom: 8px; left: 8px; }
+  .side.show ~ .summary { display: none; }
+  .edbar { right: 12px; top: 122px; flex-wrap: nowrap; overflow-x: auto; }
+  .edbar > * { flex: none; }
+  .edpanel { top: auto; left: 8px; right: 8px; width: auto; height: 46%; bottom: 8px; }
+}
+</style>
+<script type="importmap">{ "imports": { "three": "./three.module.min.js" } }</script>
+</head>
+<body>
+<div id="scene"></div>
+<canvas id="plan" aria-label="Plan 2D editabil"></canvas>
+<div id="labels"></div>
+
+<div class="ui topbar">
+  <div class="panelish title">
+    <h1 id="pageTitle">Casa 3D</h1>
+    <span class="pill" id="connPill"><span class="dot"></span><span id="connText">Se conectează…</span></span>
+  </div>
+  <div class="panelish tools">
+    <div class="seg viewtools" role="group" aria-label="Etaj" id="floorSeg"></div>
+    <button class="tg viewtools" type="button" id="tgHeat" aria-pressed="false">Temperaturi</button>
+    <button class="tg" type="button" id="tgWalls" aria-pressed="false">Pereți înalți</button>
+    <button class="tg viewtools" type="button" id="tgRoof" aria-pressed="false">Acoperiș</button>
+    <button class="tg viewtools" type="button" id="tgLabels" aria-pressed="true">Etichete</button>
+    <button class="tg" type="button" id="tgEdit" aria-pressed="false">Editează</button>
+  </div>
+</div>
+
+<div class="ui panelish edbar" id="edBar">
+  <div class="seg" role="group" aria-label="Unealtă" id="toolSeg">
+    <button type="button" data-tool="select" aria-pressed="true" title="Selectează și mută (V)">Selectare</button>
+    <button type="button" data-tool="room" aria-pressed="false" title="Trage un dreptunghi (C)">Cameră</button>
+    <button type="button" data-tool="wall" aria-pressed="false" title="Trage de la un capăt la altul (P)">Perete</button>
+    <button type="button" data-tool="door" aria-pressed="false" title="Click pe un perete">Ușă</button>
+    <button type="button" data-tool="window" aria-pressed="false" title="Click pe un perete">Fereastră</button>
+    <button type="button" data-tool="item" aria-pressed="false" title="Click pe plan (O)">Obiect</button>
+    <button type="button" data-tool="dev" aria-pressed="false" title="Click pe plan (S)">Senzor</button>
+  </div>
+  <select id="presetSel" aria-label="Tip obiect" style="display:none"></select>
+  <span class="sep"></span>
+  <select id="edFloor" aria-label="Etaj editat"></select>
+  <div class="seg" role="group" aria-label="Vedere" id="edView">
+    <button type="button" data-v="2d" aria-pressed="true">Plan</button>
+    <button type="button" data-v="3d" aria-pressed="false">3D</button>
+  </div>
+  <select id="snapSel" aria-label="Magnet">
+    <option value="0.01">Magnet 1 cm</option>
+    <option value="0.05" selected>Magnet 5 cm</option>
+    <option value="0.1">Magnet 10 cm</option>
+    <option value="0">Fără magnet</option>
+  </select>
+  <span class="sep"></span>
+  <button class="tg" type="button" id="btnUndo" title="Anulează (Ctrl+Z)">↶</button>
+  <button class="tg" type="button" id="btnRedo" title="Refă (Ctrl+Shift+Z)">↷</button>
+  <button class="tg" type="button" id="btnFit" title="Încadrează planul">Încadrează</button>
+</div>
+<aside class="ui panelish edpanel" id="edPanel">
+  <div class="btns" style="justify-content:space-between;margin-bottom:8px">
+    <span class="savestate" id="saveState">Salvat</span>
+    <span class="btns">
+      <button class="btn sm" type="button" id="btnRevert">Renunță</button>
+      <button class="btn sm primary" type="button" id="btnSave">Salvează</button>
+    </span>
+  </div>
+  <div id="props"></div>
+</aside>
+
+<aside class="ui panelish side" id="side" aria-live="polite">
+  <button class="close" type="button" id="sideClose" aria-label="Închide">×</button>
+  <div id="sideBody"></div>
+</aside>
+
+<div class="ui panelish summary" id="summary"></div>
+<div class="ui panelish hint" id="hint">Trage pentru rotire · rotița sau două degete pentru zoom · click pe un senzor sau o cameră</div>
+<div class="welcome" id="welcome" hidden role="dialog" aria-modal="true" aria-labelledby="wTitle">
+  <div class="panelish wbox">
+    <h2 id="wTitle">Bun venit!</h2>
+    <p>Nu ai încă o schiță salvată. Desenezi casa în editor, apoi pui pe ea senzorii, luminile și restul entităților din Home Assistant.</p>
+    <div class="wopts">
+      <button type="button" data-w="gol"><b>Schiță nouă</b><small>Un etaj gol. Tragi pe plan ca să desenezi prima cameră.</small></button>
+      <button type="button" data-w="exemplu"><b>Pornește de la exemplu</b><small>Un apartament cu mansardă, pe care îl modifici după casa ta. Păstrez doar senzorii care există la tine.</small></button>
+      <button type="button" data-w="import"><b>Import JSON</b><small>O schiță exportată anterior din Casa 3D.</small></button>
+    </div>
+    <div class="wnote" id="wNote" hidden>Doar un administrator poate salva schița în Home Assistant.</div>
+    <button class="btn sm" type="button" data-w="inchide">Doar mă uit la exemplu</button>
+    <input type="file" id="wFile" accept=".json,application/json" hidden>
+  </div>
+</div>
+<datalist id="entList"></datalist>
+<div class="toast" id="toast" role="status"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from './OrbitControls.js';
+
+/* =====================================================================
+   EXEMPLUL INCLUS (un apartament cu mansardă). Se afișează până la prima
+   salvare și se poate alege din ecranul de bun venit sau din editor.
+   x = de la ușa de intrare spre baie, z = de la peretele din spate spre hol.
+   După „Salvează” schița se păstrează în Home Assistant: cu integrarea
+   Casa 3D în `.storage/casa_3d.config`, altfel în panoul ascuns
+   „apartament-3d-date”. Se modifică din pagină (butonul Editează).
+   ===================================================================== */
+const DEFAULT_LEGACY = {
+  floors: [
+    {
+      id: 'parter', name: 'Parter', y: 0, height: 2.6,
+      rooms: [
+        { id: 'hol', name: 'Hol', color: '#d8b07a', poly: [[0, 3.8], [6.4, 3.8], [6.4, 5.4], [0, 5.4]] },
+        { id: 'bucatarie', name: 'Bucătărie', color: '#d6c8a4', poly: [[2.0, 0], [4.4, 0], [4.4, 3.8], [2.0, 3.8]] },
+        { id: 'redroom', name: 'Camera roșie', color: '#c99aa0', poly: [[4.4, 0], [8.4, 0], [8.4, 3.8], [4.4, 3.8]] },
+        { id: 'baie', name: 'Baie', color: '#9dbcd6', poly: [[6.4, 3.8], [8.4, 3.8], [8.4, 5.4], [6.4, 5.4]] },
+      ],
+      walls: [
+        [0, 3.8, 2.0, 3.8, 1], [2.0, 3.8, 2.0, 0, 1], [2.0, 0, 8.4, 0, 1], [8.4, 0, 8.4, 5.4, 1], [8.4, 5.4, 0, 5.4, 1], [0, 5.4, 0, 3.8, 1],
+        [2.0, 3.8, 8.4, 3.8], [4.4, 0, 4.4, 3.8], [6.4, 3.8, 6.4, 5.4],
+      ],
+      openings: [
+        [0, 4.15, 0, 5.05, 'intrare'], [2.15, 3.8, 3.35, 3.8, 'gol'], [4.7, 3.8, 5.5, 3.8, 'usa'], [6.4, 4.25, 6.4, 5.05, 'usa'],
+        [2.5, 0, 3.4, 0, 'fereastra'], [5.9, 0, 7.4, 0, 'fereastra'],
+      ],
+      furniture: [
+        { n: 'Cuier', box: [0.1, 3.85, 1.4, 4.15], h: 1.0, c: '#5b4033' },
+        { n: 'Stender', box: [2.6, 4.95, 4.4, 5.35], h: 1.1, c: '#c9ced6' },
+        { n: 'Frigider', box: [5.7, 4.75, 6.35, 5.35], h: 1.85, c: '#9aa3ab' },
+        { n: 'Blat bucătărie', box: [2.02, 0.35, 2.62, 3.7], h: 0.9, c: '#24272b' },
+        { n: 'Dulapuri suspendate', box: [2.02, 0.35, 2.37, 3.7], h: 0.7, c: '#e3c21d', y0: 1.5 },
+        { n: 'Masă rotundă', cyl: [3.0, 0.8], r: 0.38, h: 0.75, c: '#6b4a32' },
+        { n: 'Centrală', box: [2.05, 0.03, 2.55, 0.33], h: 0.7, c: '#f2f2f2', y0: 1.4 },
+        { n: 'Dulap sub scară', box: [3.55, 2.7, 4.35, 3.75], h: 0.9, c: '#2a2422' },
+        { n: 'Colțar', box: [4.5, 3.15, 6.9, 3.72], h: 0.45, c: '#9e1b22' },
+        { n: 'Colțar (latura scurtă)', box: [4.5, 1.9, 5.07, 3.72], h: 0.45, c: '#9e1b22' },
+        { n: 'Birou', box: [5.9, 0.08, 7.4, 0.7], h: 0.75, c: '#4a3a30' },
+        { n: 'Perete TV / rafturi', box: [8.0, 0.5, 8.35, 3.4], h: 2.0, c: '#2a2a2e' },
+        { n: 'Cabină duș', box: [7.6, 4.6, 8.35, 5.35], h: 2.0, c: '#cfe3f1', glass: true },
+        { n: 'Chiuvetă', box: [6.9, 3.85, 7.45, 4.25], h: 0.85, c: '#f5f5f5' },
+        { n: 'WC', box: [7.9, 3.85, 8.35, 4.4], h: 0.45, c: '#f5f5f5' },
+        { n: 'Dulap baie', box: [6.45, 4.95, 6.9, 5.35], h: 1.9, c: '#ffffff' },
+      ],
+      stairs: { axis: 'z', x1: 3.5, x2: 4.4, z1: 0.7, z2: 3.7, steps: 12 },
+    },
+    {
+      id: 'mansarda', name: 'Mansardă', y: 2.9, height: 2.4, knee: 1.0,
+      rooms: [
+        { id: 'dormitor', name: 'Dormitor', color: '#b8c4d6', poly: [[4.4, 0], [8.4, 0], [8.4, 3.4], [4.4, 3.4]] },
+        { id: 'birou', name: 'Birou', color: '#c5cfb6', poly: [[4.4, 3.4], [8.4, 3.4], [8.4, 5.4], [4.4, 5.4]] },
+        { id: 'palier', name: 'Scară', color: '#cfc7bb', poly: [[3.5, 0.7], [4.4, 0.7], [4.4, 5.4], [2.0, 5.4], [2.0, 3.8], [3.5, 3.8]], holes: [[[3.5, 0.7], [4.4, 0.7], [4.4, 3.6], [3.5, 3.6]]] },
+        { id: 'dressing', name: 'Dressing', color: '#d9c4a0', poly: [[0, 3.0], [2.0, 3.0], [2.0, 5.4], [0, 5.4]] },
+      ],
+      walls: [
+        [0, 3.0, 2.0, 3.0, 1], [0, 5.4, 0, 3.0, 1], [0, 5.4, 8.4, 5.4, 1], [8.4, 0, 8.4, 5.4, 1], [4.4, 0, 8.4, 0, 1],
+        [4.4, 0, 4.4, 0.7, 1], [3.5, 0.7, 4.4, 0.7], [3.5, 0.7, 3.5, 3.8], [2.0, 3.8, 3.5, 3.8], [2.0, 3.0, 2.0, 5.4], [4.4, 0.7, 4.4, 5.4],
+      ],
+      openings: [[2.0, 4.2, 2.0, 5.0, 'usa'], [4.4, 4.15, 4.4, 4.95, 'usa'], [8.4, 1.0, 8.4, 2.2, 'fereastra']],
+      furniture: [
+        { n: 'Pat', box: [6.3, 0.6, 8.3, 2.2], h: 0.5, c: '#d7d3cb' },
+        { n: 'Tăblie pat', box: [8.05, 0.6, 8.3, 2.2], h: 0.9, c: '#8c7a6b' },
+        { n: 'Dulap', box: [4.6, 0.05, 6.0, 0.65], h: 1.8, c: '#b89a7c' },
+        { n: 'Birou', box: [5.6, 4.8, 7.4, 5.35], h: 0.75, c: '#b89a7c' },
+        { n: 'Dulapuri dressing', box: [0.05, 3.1, 0.65, 5.3], h: 1.9, c: '#f2b51a' },
+        { n: 'Dulap dressing', box: [0.7, 4.8, 1.95, 5.35], h: 1.9, c: '#c9b08f' },
+      ],
+    },
+  ],
+};
+const DEFAULT_DEVICES = [
+  { e: 'binary_sensor.senzor_usa_intrare_contact', kind: 'door', name: 'Ușă intrare', floor: 'parter', pos: [0.15, 4.6], y: 1.2 },
+  { e: 'light.casca', kind: 'light', name: 'Hol – Cască', floor: 'parter', pos: [0.9, 4.6], y: 2.5 },
+  { e: 'light.hol', kind: 'light', name: 'Hol', floor: 'parter', pos: [2.2, 4.6], y: 2.5 },
+  { e: 'light.stender', kind: 'light', name: 'Hol – Stender', floor: 'parter', pos: [3.6, 4.6], y: 2.5 },
+  { e: 'light.frigider', kind: 'light', name: 'Hol – Frigider', floor: 'parter', pos: [5.4, 4.6], y: 2.5 },
+  { e: 'light.oglinda', kind: 'light', name: 'Baie – Oglindă', floor: 'parter', pos: [7.2, 4.3], y: 2.4 },
+  { e: 'light.bucatarie', kind: 'light', name: 'Bucătărie', floor: 'parter', pos: [3.0, 2.2], y: 2.5 },
+  { e: 'light.kitchen', kind: 'light', name: 'Bucătărie (Tuya)', floor: 'parter', pos: [3.0, 1.0], y: 2.5 },
+  { e: 'light.led_strip_rgbic_cct_2x5m', kind: 'light', name: 'Bandă LED', floor: 'parter', pos: [2.45, 2.4], y: 1.45 },
+  { e: 'climate.centrala', kind: 'climate', name: 'Centrală', floor: 'parter', pos: [2.12, 1.0], y: 1.5, extra: { temp: 'sensor.centrala_local_temperature' } },
+  { e: 'switch.kitchen_smart_plug_socket_1', kind: 'plug', name: 'Priză bucătărie', floor: 'parter', pos: [2.3, 3.3], y: 1.0, extra: { power: 'sensor.smart_plug_power' } },
+  { e: 'sensor.senzor_ntc_temperatura', kind: 'ntc', name: 'Senzor NTC', floor: 'parter', pos: [2.6, 0.25], y: 1.2, extra: { defect: 'binary_sensor.senzor_ntc_defect_senzor', amax: 'binary_sensor.senzor_ntc_alarma_temperatura_maxima', amin: 'binary_sensor.senzor_ntc_alarma_temperatura_minima' } },
+  { e: 'light.all_red_room', kind: 'light', name: 'Camera roșie', floor: 'parter', pos: [6.4, 1.9], y: 2.5 },
+  { e: 'media_player.televizor', kind: 'tv', name: 'Televizor', floor: 'parter', pos: [7.95, 1.9], y: 1.2, rot: -90, extra: { ambilight: 'light.televizor_ambilight' } },
+  { e: 'sensor.senzor_temperatura_1_temperature', kind: 'temp', name: 'Senzor temperatură 1', floor: 'parter', pos: [4.55, 1.2], y: 1.5, extra: { hum: 'sensor.senzor_temperatura_1_humidity' } },
+  { e: 'sensor.senzor_plante_soil_moisture', kind: 'plant', name: 'Senzor plante', floor: 'parter', pos: [8.2, 3.1], y: 1.8, extra: { temp: 'sensor.senzor_plante_temperature', hum: 'sensor.senzor_plante_humidity', dry: 'binary_sensor.senzor_plante_dry' } },
+  { e: 'light.dormitor', kind: 'light', name: 'Dormitor', floor: 'mansarda', pos: [6.4, 1.7], y: 2.2 },
+  { e: 'light.bedroom', kind: 'light', name: 'Dormitor (Tuya)', floor: 'mansarda', pos: [8.15, 2.5], y: 1.1 },
+  { e: 'sensor.senzor_temperatura_2_temperature', kind: 'temp', name: 'Senzor temperatură 2', floor: 'mansarda', pos: [4.55, 1.6], y: 1.2, extra: { hum: 'sensor.senzor_temperatura_2_humidity' } },
+  { e: 'light.birou', kind: 'light', name: 'Birou', floor: 'mansarda', pos: [6.4, 4.4], y: 2.2 },
+  { e: 'light.dressing_1_2', kind: 'light', name: 'Dressing 1', floor: 'mansarda', pos: [0.9, 3.8], y: 2.0 },
+  { e: 'light.dressing_2_2', kind: 'light', name: 'Dressing 2', floor: 'mansarda', pos: [1.3, 4.7], y: 2.0 },
+];
+
+/* =====================================================================
+   UTILITARE
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const QS = new URLSearchParams(location.search);
+const PAGE_TITLE = QS.get('title') || 'Casa 3D';
+const NTC_LINK = QS.get('ntc') || '/ntc-display';
+document.title = PAGE_TITLE; $('pageTitle').textContent = PAGE_TITLE;
+const uid = p => p + '_' + Math.random().toString(36).slice(2, 8);
+const clone = o => JSON.parse(JSON.stringify(o));
+const r2 = v => Math.round(v * 100) / 100;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('apt3d.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('apt3d.' + k, JSON.stringify(v)); } catch (e) { /* ignorat */ } },
+  del(k) { try { localStorage.removeItem('apt3d.' + k); } catch (e) { /* ignorat */ } },
+};
+const settings = Object.assign({ floor: 'toate', heat: false, walls: false, roof: false, labels: window.innerWidth >= 760, url: '' }, store.get('settings', {}));
+if (settings.floor === 'ambele') settings.floor = 'toate';
+const saveSettings = () => store.set('settings', settings);
+let toastT = 0;
+function toast(t, bad) { const el = $('toast'); el.textContent = t; el.className = 'toast show' + (bad ? ' bad' : ''); clearTimeout(toastT); toastT = setTimeout(() => el.className = 'toast', 3400); }
+const fmt = (v, d = 1) => Number.isFinite(v) ? v.toFixed(d) : '—';
+function ago(iso) {
+  const s = (Date.now() - Date.parse(iso)) / 1000;
+  if (!Number.isFinite(s)) return '';
+  if (s < 60) return 'acum câteva secunde';
+  if (s < 3600) return `acum ${Math.floor(s / 60)} min`;
+  if (s < 86400) return `acum ${Math.floor(s / 3600)} h`;
+  return `acum ${Math.floor(s / 86400)} zile`;
+}
+const ICONS = {
+  light: ['Bec', '<path fill="currentColor" d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2M9 21a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1H9z"/>'],
+  temp: ['Termometru', '<path fill="currentColor" d="M15 13V5a3 3 0 0 0-6 0v8a5 5 0 1 0 6 0m-3-9a1 1 0 0 1 1 1v3h-2V5a1 1 0 0 1 1-1"/>'],
+  climate: ['Flacără', '<path fill="currentColor" d="M12 2s-6 6.2-6 11a6 6 0 0 0 12 0c0-4.8-6-11-6-11m0 17a3 3 0 0 1-3-3c0-1.6 3-5 3-5s3 3.4 3 5a3 3 0 0 1-3 3"/>'],
+  door: ['Ușă', '<path fill="currentColor" d="M6 2h12v20H6zm9 9a1 1 0 1 0 0 2a1 1 0 0 0 0-2"/>'],
+  window: ['Fereastră', '<path fill="currentColor" d="M4 3h16v18H4zm2 2v6h5V5zm7 0v6h5V5zm-7 8v6h5v-6zm7 0v6h5v-6z"/>'],
+  plant: ['Plantă', '<path fill="currentColor" d="M12 22c-1 0-2-.4-2-1v-6.2C6.8 14.3 4 11.5 4 8V6h2c2.6 0 4.9 1.4 6 3.5C13.1 7.4 15.4 6 18 6h2v2c0 3.5-2.8 6.3-6 6.8V21c0 .6-1 1-2 1"/>'],
+  plug: ['Priză', '<path fill="currentColor" d="M16 7V3h-2v4h-4V3H8v4H7v6a5 5 0 0 0 4 4.9V22h2v-4.1a5 5 0 0 0 4-4.9V7z"/>'],
+  tv: ['Televizor', '<path fill="currentColor" d="M21 17H3V5h18m0-2H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v2h8v-2h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2"/>'],
+  ntc: ['Sondă', '<path fill="currentColor" d="M13 3v10.3a3.5 3.5 0 1 1-2 0V3zm-1 12a1.5 1.5 0 1 0 0 3a1.5 1.5 0 0 0 0-3M15 4h5v2h-5zm0 4h4v2h-4z"/>'],
+  motion: ['Mișcare', '<path fill="currentColor" d="M13.5 5.5a2 2 0 1 0 0-4a2 2 0 0 0 0 4M9.8 8.9L7 23h2.1l1.8-8l2.1 2v6h2v-7.5l-2.1-2l.6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1c-.3 0-.5.1-.8.1L6 8.3V13h2V9.6z"/>'],
+  water: ['Apă', '<path fill="currentColor" d="M12 3s-6 6.6-6 11a6 6 0 0 0 12 0c0-4.4-6-11-6-11"/>'],
+  power: ['Fulger', '<path fill="currentColor" d="M11 21h-1l1-7H7.5c-.9 0-.3-.8-.3-.8L13 3h1l-1 7h3.5c.5 0 .6.3.4.6z"/>'],
+  lock: ['Lacăt', '<path fill="currentColor" d="M12 17a2 2 0 1 0 0-4a2 2 0 0 0 0 4m6-9h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2M9 6a3 3 0 0 1 6 0v2H9z"/>'],
+  fan: ['Ventilator', '<path fill="currentColor" d="M12 11a1 1 0 1 0 0 2a1 1 0 0 0 0-2m.5-9C17 2 17.1 5.6 14.7 6.8c-1 .5-1.4 1.4-1.6 2.3c.5.2.9.5 1.2.9c3.7-2 7.7-1.2 7.7 2.5c0 4.5-3.6 4.6-4.8 2.2c-.5-1-1.4-1.4-2.3-1.6c-.2.5-.5.9-.9 1.2c2 3.7 1.2 7.7-2.5 7.7c-4.5 0-4.6-3.6-2.2-4.8c1-.5 1.4-1.4 1.6-2.3c-.5-.2-.9-.5-1.2-.9C6 15.9 2 15.1 2 11.5C2 7 5.6 6.9 6.8 9.3c.5 1 1.4 1.4 2.3 1.6c.2-.5.5-.9.9-1.2C8 6 8.8 2 12.5 2"/>'],
+  dot: ['Punct', '<circle cx="12" cy="12" r="6" fill="currentColor"/>'],
+};
+const icon = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${(ICONS[k] || ICONS.dot)[1]}</svg>`;
+const KINDS = {
+  light: { name: 'Lumină', icon: 'light', shape: 'sfera' },
+  temp: { name: 'Temperatură / umiditate', icon: 'temp', shape: 'cub' },
+  climate: { name: 'Termostat', icon: 'climate', shape: 'cub' },
+  door: { name: 'Ușă / contact', icon: 'door', shape: 'cub' },
+  plant: { name: 'Senzor plante', icon: 'plant', shape: 'cub' },
+  plug: { name: 'Priză / comutator', icon: 'plug', shape: 'cub' },
+  tv: { name: 'Televizor / media', icon: 'tv', shape: 'cub' },
+  ntc: { name: 'Senzor NTC', icon: 'ntc', shape: 'cub' },
+  generic: { name: 'General (orice entitate)', icon: 'dot', shape: 'sfera' },
+};
+const EXTRA_KEYS = {
+  temp: [['hum', 'Umiditate']], plant: [['temp', 'Temperatură'], ['hum', 'Umiditate aer'], ['dry', 'Senzor uscat']],
+  plug: [['power', 'Putere']], climate: [['temp', 'Temperatură locală']], tv: [['ambilight', 'Ambilight']],
+  ntc: [['defect', 'Defect senzor'], ['amax', 'Alarmă maximă'], ['amin', 'Alarmă minimă']], door: [], light: [], generic: [],
+};
+const PRESETS = {
+  generic: { n: 'Obiect', type: 'box', w: 0.6, d: 0.6, h: 0.8, color: '#a89a8a' },
+  pat: { n: 'Pat', w: 1.6, d: 2.0, h: 0.5, color: '#d7d3cb' },
+  canapea: { n: 'Canapea', w: 2.0, d: 0.9, h: 0.45, color: '#9e1b22' },
+  dulap: { n: 'Dulap', w: 1.2, d: 0.6, h: 2.0, color: '#b89a7c' },
+  masa: { n: 'Masă', w: 1.2, d: 0.8, h: 0.75, color: '#6b4a32' },
+  masa_rotunda: { n: 'Masă rotundă', type: 'cyl', w: 0.9, d: 0.9, h: 0.75, color: '#6b4a32' },
+  birou: { n: 'Birou', w: 1.4, d: 0.7, h: 0.75, color: '#4a3a30' },
+  blat: { n: 'Blat bucătărie', w: 2.4, d: 0.6, h: 0.9, color: '#24272b' },
+  suspendat: { n: 'Dulap suspendat', w: 1.2, d: 0.35, h: 0.7, y0: 1.5, color: '#e3c21d' },
+  frigider: { n: 'Frigider', w: 0.6, d: 0.65, h: 1.85, color: '#9aa3ab' },
+  dus: { n: 'Cabină duș', w: 0.9, d: 0.9, h: 2.0, color: '#cfe3f1', glass: true },
+  wc: { n: 'WC', w: 0.4, d: 0.65, h: 0.45, color: '#f5f5f5' },
+  chiuveta: { n: 'Chiuvetă', w: 0.55, d: 0.45, h: 0.85, color: '#f5f5f5' },
+  comoda_tv: { n: 'Comodă TV', w: 1.8, d: 0.45, h: 0.5, color: '#2a2a2e' },
+  scara: { n: 'Scară', type: 'stairs', w: 0.9, d: 3.0, h: 0, steps: 12, color: '#7a4f2d' },
+};
+const OPEN_TYPES = { usa: 'Ușă', intrare: 'Ușă de intrare', fereastra: 'Fereastră', gol: 'Gol (fără ușă)' };
+const RULE_OPS = { on: 'pornit / deschis', off: 'oprit / închis', eq: 'stare egală cu', gt: 'valoare >', lt: 'valoare <', between: 'valoare între', unavail: 'indisponibil' };
+
+/* ---------- geometrie 2D ---------- */
+function pointInPoly(x, z, poly) {
+  let ins = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i], [xj, zj] = poly[j];
+    if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi) + xi)) ins = !ins;
+  }
+  return ins;
+}
+function segProj(px, pz, a, b) {
+  const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1e-9;
+  const t = clamp(((px - a[0]) * dx + (pz - a[1]) * dz) / L2, 0, 1);
+  const qx = a[0] + dx * t, qz = a[1] + dz * t;
+  return { t, len: Math.sqrt(L2), dist: Math.hypot(px - qx, pz - qz), x: qx, z: qz };
+}
+// rotație identică cu three.js (rotation.y = θ): local (lx, lz) -> lume
+const rotXZ = (lx, lz, deg) => { const t = deg * Math.PI / 180, c = Math.cos(t), s = Math.sin(t); return [lx * c + lz * s, -lx * s + lz * c]; };
+const unrotXZ = (wx, wz, deg) => rotXZ(wx, wz, -deg);
+function itemCorners(it) { return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => { const [x, z] = rotXZ(a * it.w / 2, b * it.d / 2, it.rot || 0); return [it.x + x, it.z + z]; }); }
+function floorBBox(f) {
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+  const add = (x, z) => { x0 = Math.min(x0, x); z0 = Math.min(z0, z); x1 = Math.max(x1, x); z1 = Math.max(z1, z); };
+  for (const r of f.rooms) for (const [x, z] of r.poly) add(x, z);
+  for (const w of f.walls) { add(...w.a); add(...w.b); }
+  for (const it of f.items) for (const c of itemCorners(it)) add(...c);
+  if (!Number.isFinite(x0)) return { x0: 0, z0: 0, x1: 5, z1: 4 };
+  return { x0, z0, x1, z1 };
+}
+
+/* ---------- conversia configurației implicite în formatul editabil ---------- */
+function legacyToCfg(H, D) {
+  const cfg = { version: 1, floors: [], devices: [] };
+  for (const f of H.floors) {
+    const F = { id: f.id, name: f.name, y: f.y, height: f.height, roof: !!f.knee, knee: f.knee || 1.0, rooms: [], walls: [], openings: [], railings: [], items: [] };
+    for (const r of f.rooms) F.rooms.push({ id: r.id, name: r.name, color: r.color, poly: clone(r.poly), holes: clone(r.holes || []) });
+    f.walls.forEach((w, i) => F.walls.push({ id: `${f.id}_w${i}`, a: [w[0], w[1]], b: [w[2], w[3]], ext: !!w[4] }));
+    f.openings.forEach(([x1, z1, x2, z2, type], i) => {
+      for (const w of F.walls) {
+        const p1 = segProj(x1, z1, w.a, w.b), p2 = segProj(x2, z2, w.a, w.b);
+        if (p1.dist < 0.05 && p2.dist < 0.05) {
+          F.openings.push({ id: `${f.id}_o${i}`, wall: w.id, t: r2((p1.t + p2.t) / 2 * p1.len), w: r2(Math.abs(p2.t - p1.t) * p1.len), type });
+          break;
+        }
+      }
+    });
+    for (const it of f.furniture || []) {
+      if (it.box) { const [x1, z1, x2, z2] = it.box; F.items.push({ id: uid('i'), type: 'box', name: it.n || '', x: r2((x1 + x2) / 2), z: r2((z1 + z2) / 2), w: r2(x2 - x1), d: r2(z2 - z1), h: it.h, y0: it.y0 || 0, rot: 0, color: it.c, glass: !!it.glass }); }
+      else if (it.cyl) F.items.push({ id: uid('i'), type: 'cyl', name: it.n || '', x: it.cyl[0], z: it.cyl[1], w: 2 * it.r, d: 2 * it.r, h: it.h, y0: 0, rot: 0, color: it.c });
+    }
+    if (f.stairs) {
+      const s = f.stairs;
+      if (s.axis === 'z') F.items.push({ id: uid('i'), type: 'stairs', name: 'Scară', x: r2((s.x1 + s.x2) / 2), z: r2((s.z1 + s.z2) / 2), w: r2(s.x2 - s.x1), d: r2(s.z2 - s.z1), h: 0, y0: 0, rot: 0, steps: s.steps, color: '#7a4f2d' });
+      else F.items.push({ id: uid('i'), type: 'stairs', name: 'Scară', x: r2((s.x1 + s.x2) / 2), z: r2((s.z1 + s.z2) / 2), w: r2(s.z2 - s.z1), d: r2(s.x2 - s.x1), h: 0, y0: 0, rot: 90, steps: s.steps, color: '#7a4f2d' });
+    }
+    cfg.floors.push(F);
+  }
+  for (const d of D) cfg.devices.push({ id: uid('d'), e: d.e, kind: d.kind, name: d.name, floor: d.floor, pos: d.pos.slice(), y: d.y, rot: d.rot || 0, extra: Object.assign({}, d.extra || {}) });
+  const door = cfg.devices.find(d => d.kind === 'door'), op = cfg.floors[0].openings.find(o => o.type === 'intrare');
+  if (door && op) door.extra.opening = op.id;
+  return cfg;
+}
+function normalizeCfg(c) {
+  for (const f of c.floors) {
+    f.rooms ||= []; f.walls ||= []; f.openings ||= []; f.railings ||= []; f.items ||= [];
+    for (const r of f.rooms) { r.holes ||= []; r.id ||= uid('r'); }
+    for (const it of f.items) it.id ||= uid('i');
+  }
+  for (const d of c.devices) { d.id ||= uid('d'); d.extra ||= {}; if (!Number.isFinite(d.y)) d.y = 1.2; }
+  return c;
+}
+
+const emptyCfg = () => ({ version: 1, floors: [{ id: 'parter', name: 'Parter', y: 0, height: 2.6, roof: false, knee: 1, rooms: [], walls: [], openings: [], railings: [], items: [] }], devices: [] });
+const exampleCfg = () => normalizeCfg(legacyToCfg(DEFAULT_LEGACY, DEFAULT_DEVICES));
+
+/* =====================================================================
+   CONEXIUNE HOME ASSISTANT (sesiunea HA din iframe, token sau demo)
+   ===================================================================== */
+const CFG_DASH = 'apartament-3d-date';
+function embeddedConn() {
+  for (const w of [window.parent, window.top]) {
+    try {
+      if (!w || w === window) continue;
+      const root = w.document.querySelector('home-assistant');
+      if (root && root.hass && root.hass.connection) {
+        return { mode: 'ha', root, send: m => root.hass.connection.sendMessagePromise(m), subscribeEvents: (cb, t) => root.hass.connection.subscribeEvents(cb, t) };
+      }
+    } catch (e) { /* alt origin */ }
+  }
+  return null;
+}
+class TokenConn {
+  constructor(url, token) { this.url = url.replace(/\/+$/, ''); this.token = token; this.mode = 'token'; this.n = 0; this.p = new Map(); this.s = new Map(); }
+  open() {
+    return new Promise((res, rej) => {
+      const ws = this.ws = new WebSocket(this.url.replace(/^http/, 'ws') + '/api/websocket');
+      ws.onmessage = ev => {
+        const m = JSON.parse(ev.data);
+        if (m.type === 'auth_required') ws.send(JSON.stringify({ type: 'auth', access_token: this.token }));
+        else if (m.type === 'auth_ok') res(this);
+        else if (m.type === 'auth_invalid') rej(new Error('Token invalid'));
+        else if (m.type === 'result') { const p = this.p.get(m.id); this.p.delete(m.id); if (p) m.success ? p.res(m.result) : p.rej(Object.assign(new Error(m.error ? m.error.message : 'Eroare'), { code: m.error && m.error.code })); }
+        else if (m.type === 'event') { const cb = this.s.get(m.id); if (cb) cb(m.event); }
+      };
+      ws.onerror = () => rej(new Error('Nu mă pot conecta la ' + this.url));
+    });
+  }
+  send(msg) { const id = ++this.n; return new Promise((res, rej) => { this.p.set(id, { res, rej }); this.ws.send(JSON.stringify(Object.assign({ id }, msg))); }); }
+  async subscribeEvents(cb, type) { const id = ++this.n; this.s.set(id, cb); await new Promise((res, rej) => { this.p.set(id, { res, rej }); this.ws.send(JSON.stringify({ id, type: 'subscribe_events', event_type: type })); }); }
+}
+class DemoConn {
+  constructor() {
+    this.mode = 'demo'; this.cbs = []; this.st = {};
+    const now = new Date().toISOString();
+    const put = (e, s, a = {}) => { this.st[e] = { entity_id: e, state: String(s), attributes: Object.assign({ friendly_name: e.split('.')[1].replace(/_/g, ' ') }, a), last_changed: now, last_updated: now }; };
+    const lights = { 'light.casca': 'off', 'light.hol': 'on', 'light.stender': 'off', 'light.frigider': 'off', 'light.oglinda': 'off', 'light.bucatarie': 'on',
+      'light.kitchen': 'unavailable', 'light.led_strip_rgbic_cct_2x5m': 'on', 'light.all_red_room': 'off', 'light.dormitor': 'off', 'light.bedroom': 'on',
+      'light.birou': 'on', 'light.dressing_1_2': 'off', 'light.dressing_2_2': 'off', 'light.televizor_ambilight': 'off' };
+    for (const [e, s] of Object.entries(lights)) put(e, s, { brightness: 200, rgb_color: e.includes('led') ? [120, 90, 255] : [255, 214, 160] });
+    put('binary_sensor.senzor_usa_intrare_contact', 'off', { device_class: 'door' });
+    put('climate.centrala', 'heat', { current_temperature: 22.5, temperature: 23, hvac_action: 'heating', min_temp: 5, max_temp: 35, target_temp_step: 0.5, hvac_modes: ['off', 'heat'] });
+    put('sensor.centrala_local_temperature', 22.5, { unit_of_measurement: '°C', device_class: 'temperature' });
+    put('switch.kitchen_smart_plug_socket_1', 'on'); put('sensor.smart_plug_power', 42, { unit_of_measurement: 'W', device_class: 'power' });
+    put('sensor.senzor_ntc_temperatura', 41.8, { unit_of_measurement: '°C', device_class: 'temperature' });
+    put('binary_sensor.senzor_ntc_defect_senzor', 'off'); put('binary_sensor.senzor_ntc_alarma_temperatura_maxima', 'off'); put('binary_sensor.senzor_ntc_alarma_temperatura_minima', 'off');
+    put('media_player.televizor', 'on', { device_class: 'tv' });
+    put('sensor.senzor_temperatura_1_temperature', 22.9, { unit_of_measurement: '°C', device_class: 'temperature' }); put('sensor.senzor_temperatura_1_humidity', 51.6, { unit_of_measurement: '%', device_class: 'humidity' });
+    put('sensor.senzor_temperatura_2_temperature', 24.4, { unit_of_measurement: '°C', device_class: 'temperature' }); put('sensor.senzor_temperatura_2_humidity', 49.4, { unit_of_measurement: '%', device_class: 'humidity' });
+    put('sensor.senzor_plante_soil_moisture', 48, { unit_of_measurement: '%', device_class: 'moisture' }); put('sensor.senzor_plante_temperature', 23.3, { unit_of_measurement: '°C' });
+    put('sensor.senzor_plante_humidity', 70, { unit_of_measurement: '%' }); put('binary_sensor.senzor_plante_dry', 'off');
+    put('binary_sensor.miscare_hol', 'off', { device_class: 'motion' }); put('sensor.consum_casa', 640, { unit_of_measurement: 'W', device_class: 'power' });
+    put('binary_sensor.fereastra_dormitor', 'off', { device_class: 'window' }); put('sensor.co2_birou', 780, { unit_of_measurement: 'ppm', device_class: 'carbon_dioxide' });
+    this.cfg = store.get('cfg', null);
+    setInterval(() => {
+      for (const e of ['sensor.senzor_temperatura_1_temperature', 'sensor.senzor_temperatura_2_temperature', 'sensor.senzor_ntc_temperatura']) {
+        const v = parseFloat(this.st[e].state) + (Math.random() - 0.5) * 0.2; this.set(e, v.toFixed(1));
+      }
+      this.set('sensor.co2_birou', String(700 + Math.round(Math.random() * 300)));
+    }, 3000);
+  }
+  set(e, s, a) { const old = this.st[e]; const n = Object.assign({}, old, { state: String(s), attributes: Object.assign({}, old.attributes, a || {}), last_changed: new Date().toISOString() }); this.st[e] = n; for (const cb of this.cbs) cb({ data: { entity_id: e, new_state: n } }); }
+  async send(m) {
+    if (m.type === 'get_states') return Object.values(this.st);
+    if (m.type === 'lovelace/config') { if (!this.cfg) throw Object.assign(new Error('No config'), { code: 'config_not_found' }); return this.cfg; }
+    if (m.type === 'lovelace/config/save') { this.cfg = m.config; store.set('cfg', m.config); return null; }
+    if (m.type === 'lovelace/dashboards/create') return {};
+    if (m.type === 'history/history_during_period') {
+      const id = m.entity_ids[0]; const base = parseFloat(this.st[id] && this.st[id].state) || 20; const out = [];
+      for (let i = 288; i >= 0; i--) out.push({ s: (base + Math.sin(i / 30) * 1.4).toFixed(1), lu: (Date.now() - i * 300000) / 1000 });
+      return { [id]: out };
+    }
+    if (m.type === 'call_service') {
+      const id = m.target && m.target.entity_id, d = m.service_data || {}, s = this.st[id];
+      if (!s) return null;
+      const on = s.state === 'on';
+      if (m.service === 'toggle') this.set(id, on ? 'off' : 'on');
+      else if (m.service === 'turn_on') this.set(id, 'on', d.brightness_pct ? { brightness: Math.round(d.brightness_pct * 2.55) } : {});
+      else if (m.service === 'turn_off') this.set(id, 'off');
+      else if (m.service === 'set_temperature') this.set(id, s.state, { temperature: d.temperature });
+      else if (m.service === 'set_hvac_mode') this.set(id, d.hvac_mode, { hvac_action: d.hvac_mode === 'off' ? 'off' : 'idle' });
+      return null;
+    }
+    return null;
+  }
+  async subscribeEvents(cb) { this.cbs.push(cb); }
+}
+
+/* =====================================================================
+   STARE
+   ===================================================================== */
+let cfg = exampleCfg();
+const S = { conn: null, states: {}, allStates: {}, sel: null, cfgSource: 'implicit', store: 'lovelace', isAdmin: true };
+const st = e => e ? S.states[e] : undefined;
+const avail = e => { const s = st(e); return !!s && s.state !== 'unavailable' && s.state !== 'unknown'; };
+const num = e => { const s = st(e); const v = s ? parseFloat(s.state) : NaN; return Number.isFinite(v) ? v : NaN; };
+const isOn = e => { const s = st(e); return !!s && s.state === 'on'; };
+const floorById = id => cfg.floors.find(f => f.id === id);
+const fname = e => { const s = st(e); return (s && s.attributes.friendly_name) || e || ''; };
+function roomAt(f, x, z) {
+  for (const r of f.rooms) if (pointInPoly(x, z, r.poly) && !(r.holes || []).some(h => pointInPoly(x, z, h))) return r;
+  return null;
+}
+const devRoom = d => { const f = floorById(d.floor); return f ? roomAt(f, d.pos[0], d.pos[1]) : null; };
+
+function devTemp(d) {
+  if (d.kind === 'temp' || d.kind === 'ntc') return num(d.e);
+  if (d.kind === 'climate') { const a = st(d.e) && st(d.e).attributes; return a && Number.isFinite(a.current_temperature) ? a.current_temperature : num(d.extra.temp); }
+  if (d.kind === 'generic') { const s = st(d.e); return s && s.attributes.device_class === 'temperature' ? num(d.e) : NaN; }
+  return NaN;
+}
+function roomTemp(f, r) {
+  const ts = cfg.devices.filter(d => d.floor === f.id && (d.kind === 'temp' || d.kind === 'climate' || d.kind === 'generic') && devRoom(d) === r).map(devTemp).filter(Number.isFinite);
+  return ts.length ? ts.reduce((a, b) => a + b, 0) / ts.length : NaN;
+}
+const lightOn = d => d.kind === 'light' && isOn(d.e);
+function lightColor(e) { const a = st(e) && st(e).attributes; return a && Array.isArray(a.rgb_color) ? new THREE.Color(`rgb(${a.rgb_color.join(',')})`) : new THREE.Color('#ffd6a0'); }
+function lightLevel(e) { const a = st(e) && st(e).attributes; return a && Number.isFinite(a.brightness) ? a.brightness / 255 : 1; }
+function unitOf(e) { const s = st(e); return s && s.attributes.unit_of_measurement ? ' ' + s.attributes.unit_of_measurement : ''; }
+function fmtState(e, dec) {
+  const s = st(e); if (!s) return '—';
+  if (s.state === 'unavailable') return 'indisponibil';
+  const v = parseFloat(s.state);
+  if (Number.isFinite(v) && /^-?\d+(\.\d+)?$/.test(s.state.trim())) return (dec !== undefined && dec !== '' ? v.toFixed(+dec) : String(v)) + unitOf(e);
+  return { on: 'pornit', off: 'oprit', open: 'deschis', closed: 'închis', unknown: 'necunoscut', heat: 'încălzire', idle: 'repaus', heating: 'încălzește', playing: 'redă', paused: 'pauză', standby: 'standby' }[s.state] || s.state;
+}
+/* șablon etichetă: {state} {state:1} {attr:nume} {attr:nume:1} {e:entity_id} {e:entity_id:1} */
+function renderTemplate(tpl, d) {
+  return tpl.replace(/\{(state|attr|e)(?::([^}:]+))?(?::(\d))?\}/g, (_, k, a, dec) => {
+    if (k === 'state') return fmtState(d.e, a !== undefined ? a : dec);
+    if (k === 'attr') { const s = st(d.e); const v = s ? s.attributes[a] : undefined; return v === undefined ? '—' : (typeof v === 'number' && dec !== undefined ? v.toFixed(+dec) : String(v)); }
+    return fmtState(a, dec);
+  });
+}
+/* textul de pe etichetă */
+function devSummary(d) {
+  const s = st(d.e);
+  if (!d.e) return { txt: 'fără entitate', cls: 'missing' };
+  if (!s) return { txt: 'lipsă din HA', cls: 'missing' };
+  if (s.state === 'unavailable') return { txt: 'indisponibil', cls: 'off-line' };
+  if (d.label) return { txt: renderTemplate(d.label, d), cls: '' };
+  const x = d.extra || {};
+  switch (d.kind) {
+    case 'light': return isOn(d.e) ? { txt: `aprins ${Math.round(lightLevel(d.e) * 100)}%`, cls: 'on' } : { txt: 'stins', cls: '' };
+    case 'door': return isOn(d.e) ? { txt: 'DESCHISĂ', cls: 'alert' } : { txt: 'închisă', cls: '' };
+    case 'temp': { const h = num(x.hum); return { txt: `${fmt(num(d.e))} °C${Number.isFinite(h) ? ' · ' + fmt(h, 0) + ' %' : ''}`, cls: '' }; }
+    case 'climate': { const a = s.attributes, heat = a.hvac_action === 'heating'; return { txt: `${fmt(devTemp(d))} → ${fmt(a.temperature)} °C${heat ? ' · încălzește' : s.state === 'off' ? ' · oprit' : ''}`, cls: heat ? 'hot' : '' }; }
+    case 'plug': { const p = num(x.power); return isOn(d.e) ? { txt: `pornit${Number.isFinite(p) ? ' · ' + fmt(p, 0) + ' W' : ''}`, cls: 'on' } : { txt: 'oprit', cls: '' }; }
+    case 'tv': return s.state === 'off' || s.state === 'standby' ? { txt: 'oprit', cls: '' } : { txt: 'pornit', cls: 'on' };
+    case 'plant': { const dry = isOn(x.dry); return { txt: `sol ${fmt(num(d.e), 0)} %${dry ? ' · USCAT' : ''}`, cls: dry ? 'alert' : '' }; }
+    case 'ntc': { if (isOn(x.defect)) return { txt: 'senzor defect', cls: 'alert' }; const al = isOn(x.amax) || isOn(x.amin); return { txt: `${fmt(num(d.e))} °C${al ? ' · ALARMĂ' : ''}`, cls: al ? 'alert' : '' }; }
+  }
+  return { txt: fmtState(d.e), cls: s.state === 'on' ? 'on' : '' };
+}
+/* reguli de culoare: prima regulă potrivită câștigă */
+function ruleMatch(d) {
+  for (const r of (d.colors && d.colors.rules) || []) {
+    const s = st(r.e || d.e), v = s ? parseFloat(s.state) : NaN, txt = s ? s.state : '';
+    let ok = false;
+    switch (r.op) {
+      case 'on': ok = ['on', 'open', 'heat', 'playing', 'home'].includes(txt); break;
+      case 'off': ok = ['off', 'closed', 'idle', 'standby'].includes(txt); break;
+      case 'eq': ok = txt === String(r.v ?? ''); break;
+      case 'gt': ok = Number.isFinite(v) && v > parseFloat(r.v); break;
+      case 'lt': ok = Number.isFinite(v) && v < parseFloat(r.v); break;
+      case 'between': ok = Number.isFinite(v) && v >= parseFloat(r.v) && v <= parseFloat(r.v2); break;
+      case 'unavail': ok = !s || txt === 'unavailable' || txt === 'unknown'; break;
+    }
+    if (ok) return r;
+  }
+  return null;
+}
+/* ce se afișează la click (implicit, după tip) */
+function defaultPanel(d) {
+  const x = d.extra || {}, R = (e, label, attr, unit, dec) => ({ e: e || '', attr: attr || '', label: label || '', unit: unit || '', dec: dec ?? '' });
+  const A = (toggle, brightness, climate, custom) => ({ toggle, brightness, climate, custom: custom || [] });
+  switch (d.kind) {
+    case 'light': return { rows: [R('', 'Stare')], history: '', actions: A(true, true, false) };
+    case 'temp': return { rows: [R('', 'Temperatură', '', '', 1), ...(x.hum ? [R(x.hum, 'Umiditate', '', '', 0)] : [])], history: d.e, actions: A(false, false, false) };
+    case 'climate': return { rows: [R('', 'Temperatură curentă', 'current_temperature', '°C'), R('', 'Țintă', 'temperature', '°C'), R('', 'Acțiune', 'hvac_action')], history: x.temp || '', actions: A(false, false, true) };
+    case 'door': return { rows: [R('', 'Stare')], history: '', actions: A(false, false, false) };
+    case 'plant': return { rows: [R('', 'Umiditate sol', '', '', 0), ...(x.temp ? [R(x.temp, 'Temperatură', '', '', 1)] : []), ...(x.hum ? [R(x.hum, 'Umiditate aer', '', '', 0)] : [])], history: d.e, actions: A(false, false, false) };
+    case 'plug': return { rows: [R('', 'Stare'), ...(x.power ? [R(x.power, 'Putere', '', '', 0)] : [])], history: x.power || '', actions: A(true, false, false) };
+    case 'tv': return { rows: [R('', 'Stare')], history: '', actions: A(true, false, false) };
+    case 'ntc': return { rows: [R('', 'Temperatură', '', '', 1), ...(x.defect ? [R(x.defect, 'Senzor defect')] : []), ...(x.amax ? [R(x.amax, 'Alarmă maximă')] : []), ...(x.amin ? [R(x.amin, 'Alarmă minimă')] : [])], history: d.e, actions: A(false, false, false, [{ label: 'Configurare display', link: NTC_LINK }]) };
+  }
+  const s = st(d.e), numeric = s && Number.isFinite(parseFloat(s.state));
+  return { rows: [R('', 'Stare')], history: numeric ? d.e : '', actions: A(/^(switch|light|fan|input_boolean)\./.test(d.e || ''), false, false) };
+}
+const panelOf = d => d.panel || defaultPanel(d);
+
+/* =====================================================================
+   SCENA 3D
+   ===================================================================== */
+const host = $('scene');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+host.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 300);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.47;
+controls.minDistance = 3; controls.maxDistance = 45;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f99, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 14, bottom: -14, near: 1, far: 60 });
+sun.shadow.bias = -0.0005;
+scene.add(sun, sun.target);
+
+const glowTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,255,255,.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+const matCache = new Map();
+const mat = (c, o) => {
+  const k = c + (o ? JSON.stringify(o) : '');
+  if (!matCache.has(k)) { const m = new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.85, metalness: 0 }, o || {})); m.userData.cached = true; matCache.set(k, m); }
+  return matCache.get(k);
+};
+const WALL_MAT = mat('#f4f1ec'), WALL_EXT = mat('#e7e2da'), GLASS = mat('#9fd3ff', { transparent: true, opacity: 0.35, roughness: 0.1 }), RAIL = mat('#6b4a32');
+const shapeFrom = (poly, holes) => {
+  const sh = new THREE.Shape(poly.map(([x, z]) => new THREE.Vector2(x, -z)));
+  for (const h of holes || []) if (h.length >= 3) sh.holes.push(new THREE.Path(h.map(([x, z]) => new THREE.Vector2(x, -z))));
+  return sh;
+};
+function disposeTree(o) { o.traverse(n => { if (n.geometry) n.geometry.dispose(); const m = n.material; if (m && !(m.userData && m.userData.cached) && m.dispose) m.dispose(); }); }
+
+let floorGroups = {}, wallGroups = {};
+const roomMeshes = [], pickables = [];
+const labelsEl = $('labels');
+const fullWalls = () => !!settings.walls;
+
+function nextFloorY(f) { const i = cfg.floors.indexOf(f), n = cfg.floors[i + 1]; return n ? n.y - f.y : f.height; }
+function wallLen(w) { return Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]); }
+
+function buildStructure(f, grp) {
+  const g = new THREE.Group(); wallGroups[f.id] = g; grp.add(g);
+  const H = fullWalls() ? f.height : 1.15;
+  const add = (x1, z1, x2, z2, y0, y1, ext, m) => {
+    const len = Math.hypot(x2 - x1, z2 - z1); if (len < 0.01 || y1 - y0 < 0.01) return;
+    const t = ext ? 0.22 : 0.12;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(len, y1 - y0, m === GLASS ? 0.03 : t), m || (ext ? WALL_EXT : WALL_MAT));
+    mesh.position.set((x1 + x2) / 2, (y0 + y1) / 2, (z1 + z2) / 2);
+    mesh.rotation.y = -Math.atan2(z2 - z1, x2 - x1);
+    mesh.castShadow = m !== GLASS; mesh.receiveShadow = true;
+    g.add(mesh);
+  };
+  for (const w of f.walls) {
+    const len = wallLen(w); if (len < 0.01) continue;
+    const dx = (w.b[0] - w.a[0]) / len, dz = (w.b[1] - w.a[1]) / len, P = s => [w.a[0] + dx * s, w.a[1] + dz * s];
+    const cuts = f.openings.filter(o => o.wall === w.id).map(o => [clamp(o.t - o.w / 2, 0, len), clamp(o.t + o.w / 2, 0, len), o.type]).sort((a, b) => a[0] - b[0]);
+    let t = 0;
+    for (const [a, b, type] of cuts) {
+      if (a > t) add(...P(t), ...P(a), 0, H, w.ext);
+      if (type === 'fereastra') { add(...P(a), ...P(b), 0, Math.min(0.9, H), w.ext); add(...P(a), ...P(b), 0.9, Math.min(2.2, H), w.ext, GLASS); if (H > 2.2) add(...P(a), ...P(b), 2.2, H, w.ext); }
+      else if (H > 2.1) add(...P(a), ...P(b), 2.1, H, w.ext);
+      t = Math.max(t, b);
+    }
+    add(...P(t), ...w.b, 0, H, w.ext);
+  }
+  for (const r of f.railings) add(...r.a, ...r.b, 0.95, 1.0, false, RAIL);
+  const lowCut = !fullWalls();
+  for (const it of f.items) {
+    const ig = new THREE.Group(); ig.position.set(it.x, 0, it.z); ig.rotation.y = (it.rot || 0) * Math.PI / 180; g.add(ig);
+    if (it.type === 'stairs') {
+      const upper = nextFloorY(f), n = Math.max(2, it.steps || 12), run = it.d / n, maxH = lowCut ? 1.3 : upper;
+      for (let i = 0; i < n; i++) {
+        const h = upper * (i + 1) / n; if (h > maxH + 0.01) break;
+        const m = new THREE.Mesh(new THREE.BoxGeometry(it.w, 0.05, run * 0.98), mat(it.color || '#7a4f2d'));
+        m.position.set(0, h - 0.025, -it.d / 2 + run * (i + 0.5)); m.castShadow = m.receiveShadow = true; ig.add(m);
+      }
+      const reach = Math.min(maxH, upper), runL = it.d * reach / upper, len = Math.hypot(runL, reach), ang = Math.atan2(reach, runL);
+      for (const o of [-it.w / 2 + 0.03, it.w / 2 - 0.03]) {
+        const s2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, len), mat('#6b4428'));
+        s2.position.set(o, reach / 2, -it.d / 2 + runL / 2); s2.rotation.x = -ang; ig.add(s2);
+      }
+      continue;
+    }
+    const y0 = it.y0 || 0; if (lowCut && y0 >= 1.2) continue;
+    const h = lowCut ? Math.min(it.h, 1.3) : it.h; if (!(h > 0)) continue;
+    const m = it.type === 'cyl'
+      ? new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, h, 28), it.glass ? GLASS : mat(it.color || '#999'))
+      : new THREE.Mesh(new THREE.BoxGeometry(it.w, h, it.d), it.glass ? GLASS : mat(it.color || '#999'));
+    if (it.type === 'cyl') m.scale.set(it.w, 1, it.d);
+    m.position.y = y0 + h / 2; m.castShadow = !it.glass; m.receiveShadow = true; ig.add(m);
+  }
+}
+
+function buildFloor(f) {
+  const grp = new THREE.Group(); grp.userData.floor = f; floorGroups[f.id] = grp; scene.add(grp);
+  for (const r of f.rooms) {
+    if (r.poly.length < 3) continue;
+    const geo = new THREE.ExtrudeGeometry(shapeFrom(r.poly, r.holes), { depth: 0.12, bevelEnabled: false });
+    geo.rotateX(-Math.PI / 2); geo.translate(0, -0.12, 0);
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: r.color, roughness: 0.85 }));
+    m.receiveShadow = true; m.userData = { room: r, floor: f, base: new THREE.Color(r.color) };
+    grp.add(m); roomMeshes.push(m);
+  }
+  buildStructure(f, grp);
+  if (f.roof && f.rooms.length) {
+    const bb = floorBBox(f), roof = new THREE.Group();
+    const ridgeY = f.height, kneeY = f.knee || 1.0, W = bb.x1 - bb.x0, zMid = (bb.z0 + bb.z1) / 2;
+    const rm = new THREE.MeshStandardMaterial({ color: '#8d5a3c', transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false });
+    for (const z0 of [bb.z0, bb.z1]) {
+      const slope = Math.hypot(zMid - z0, ridgeY - kneeY);
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.4, slope + 0.3), rm);
+      p.position.set((bb.x0 + bb.x1) / 2, (ridgeY + kneeY) / 2, (zMid + z0) / 2);
+      p.rotation.x = (z0 > zMid ? -1 : 1) * (Math.PI / 2 - Math.atan2(ridgeY - kneeY, Math.abs(zMid - z0)));
+      roof.add(p);
+    }
+    grp.add(roof); grp.userData.roofGroup = roof;
+  }
+}
+
+const markerGeo = s => s === 'cub' ? new THREE.BoxGeometry(0.18, 0.18, 0.06) : s === 'disc' ? new THREE.CylinderGeometry(0.15, 0.15, 0.04, 24) : new THREE.SphereGeometry(0.11, 20, 14);
+function buildDevice(d) {
+  const grp = floorGroups[d.floor]; if (!grp) return;
+  const g = new THREE.Group(); g.userData.dev = d; grp.add(g); d._g = g;
+  const shape = d.shape || (KINDS[d.kind] || KINDS.generic).shape;
+  const m = new THREE.Mesh(markerGeo(shape), new THREE.MeshStandardMaterial({ color: '#d0d4da', roughness: 0.4, emissive: '#000000' }));
+  const sz = Number.isFinite(d.size) ? d.size : 1; m.scale.setScalar(sz);
+  m.position.y = d.y; m.userData.dev = d; g.add(m); d._mesh = m; pickables.push(m);
+  d._glow = d._pool = d._leaf = d._screen = null;
+  if (d.kind === 'light' || (d.colors && (d.colors.rules || []).some(r => r.glow))) {
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: '#ffd6a0', blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+    glow.scale.set(1.1 * sz, 1.1 * sz, 1); glow.position.y = d.y; g.add(glow); d._glow = glow;
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(1.25, 40), new THREE.MeshBasicMaterial({ map: glowTex, color: '#ffd6a0', blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.6 }));
+    pool.rotation.x = -Math.PI / 2; pool.position.y = 0.012; g.add(pool); d._pool = pool;
+  }
+  if (d.kind === 'tv') {
+    const scr = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.64, 0.04), new THREE.MeshStandardMaterial({ color: '#111', emissive: '#000' }));
+    scr.position.set(0, Math.max(0.35, d.y - 0.05), 0); scr.rotation.y = (d.rot || 0) * Math.PI / 180; g.add(scr); d._screen = scr;
+  }
+  if (d.kind === 'door' && d.extra.opening) {   // foaia ușii din plan; se deschide când contactul e deschis
+    const f = floorById(d.floor), op = f && f.openings.find(o => o.id === d.extra.opening), w = op && f.walls.find(x => x.id === op.wall);
+    if (op && w) {
+      const len = wallLen(w), dx = (w.b[0] - w.a[0]) / len, dz = (w.b[1] - w.a[1]) / len, h0 = op.t - op.w / 2;
+      const pivot = new THREE.Group(); pivot.userData.abs = [w.a[0] + dx * h0, w.a[1] + dz * h0];
+      const ang = Math.atan2(-dz, dx); pivot.rotation.y = ang; pivot.userData.base = ang;
+      const leaf = new THREE.Mesh(new THREE.BoxGeometry(op.w, 2.0, 0.05), new THREE.MeshStandardMaterial({ color: '#4a2a1e', roughness: 0.7 }));
+      leaf.position.set(op.w / 2, 1.0, 0); pivot.add(leaf); g.add(pivot); d._leaf = { pivot, leaf };
+    }
+  }
+}
+function placeDevices() {
+  for (const d of cfg.devices) if (d._g) {
+    d._g.position.set(d.pos[0], 0, d.pos[1]); d._mesh.position.y = d.y; if (d._glow) d._glow.position.y = d.y;
+    if (d._leaf) { const a = d._leaf.pivot.userData.abs; d._leaf.pivot.position.set(a[0] - d.pos[0], 0, a[1] - d.pos[1]); }
+  }
+}
+
+function buildLabels() {
+  labelsEl.innerHTML = '';
+  for (const d of cfg.devices) {
+    if (!d._g) continue;
+    const el = document.createElement('div'); el.className = 'lbl'; el.innerHTML = `<span class="ic">${icon(d.icon || (KINDS[d.kind] || KINDS.generic).icon)}</span><b></b><small></small>`;
+    el.addEventListener('click', ev => { ev.stopPropagation(); if (ED.on) edSelect({ t: 'dev', id: d.id }); else select({ dev: d }); });
+    labelsEl.appendChild(el); d._el = el;
+  }
+  for (const f of cfg.floors) for (const r of f.rooms) {
+    const el = document.createElement('div'); el.className = 'room-lbl'; el.innerHTML = `${esc(r.name)}<span></span>`;
+    labelsEl.appendChild(el); r._el = el;
+    let cx = 0, cz = 0; for (const [x, z] of r.poly) { cx += x; cz += z; } r._c = [cx / Math.max(1, r.poly.length), cz / Math.max(1, r.poly.length)];
+  }
+}
+
+function buildAll() {
+  for (const g of Object.values(floorGroups)) { scene.remove(g); disposeTree(g); }
+  floorGroups = {}; wallGroups = {}; roomMeshes.length = 0; pickables.length = 0;
+  for (const f of cfg.floors) buildFloor(f);
+  for (const d of cfg.devices) buildDevice(d);
+  placeDevices(); buildLabels(); buildFloorSeg(); computeModes(); applyFloorMode(false); refreshVisuals();
+  if (S.sel && S.sel.dev && !cfg.devices.includes(S.sel.dev)) select(null);
+}
+
+/* =====================================================================
+   ACTUALIZARE VIZUALĂ DIN STĂRI
+   ===================================================================== */
+function heatColor(t) {
+  const stops = [[16, '#4f86f7'], [20, '#4fc3a1'], [23, '#f2c94c'], [26, '#f2994a'], [29, '#eb5757']];
+  if (!Number.isFinite(t)) return null;
+  if (t <= stops[0][0]) return new THREE.Color(stops[0][1]);
+  for (let i = 1; i < stops.length; i++) if (t <= stops[i][0]) { const [t0, c0] = stops[i - 1], [t1, c1] = stops[i]; return new THREE.Color(c0).lerp(new THREE.Color(c1), (t - t0) / (t1 - t0)); }
+  return new THREE.Color(stops[stops.length - 1][1]);
+}
+function devColor(d) {   // regulă potrivită > culoarea implicită aleasă > comportamentul tipului
+  const r = ruleMatch(d);
+  if (r) return { color: r.color || '#e53935', glow: !!r.glow };
+  if (d.colors && d.colors.def) return { color: d.colors.def, glow: false };
+  return null;
+}
+function refreshVisuals() {
+  for (const d of cfg.devices) {
+    if (!d._el) continue;
+    const s = st(d.e), sum = devSummary(d), rc = devColor(d);
+    d._el.className = 'lbl ' + sum.cls + ((S.sel && S.sel.dev === d) || (ED.on && ED.sel && ED.sel.id === d.id) ? ' sel' : '') + (settings.labels ? '' : ' compact');
+    d._el.querySelector('b').textContent = d.name || '(fără nume)';
+    d._el.querySelector('small').textContent = d.kind === 'light' && !d.label && (sum.cls === 'on' || sum.txt === 'stins') ? '' : sum.txt;
+    d._el.title = `${d.name}: ${sum.txt}`;
+    const ic = d._el.querySelector('.ic'); ic.style.background = rc ? rc.color : ''; ic.style.color = rc ? '#fff' : '';
+    const m = d._mesh.material;
+    if (rc) {
+      m.color.set(rc.color); m.emissive.set(rc.glow ? rc.color : '#000'); m.emissiveIntensity = rc.glow ? 1.1 : 0;
+      if (d._glow) { d._glow.visible = d._pool.visible = rc.glow; d._glow.material.color.set(rc.color); d._pool.material.color.set(rc.color); d._pool.material.opacity = 0.6; }
+    } else if (d.kind === 'light') {
+      const on = lightOn(d), col = lightColor(d.e), lvl = lightLevel(d.e);
+      m.color.set(on ? col : (s && s.state === 'unavailable' ? '#7a7f87' : '#d0d4da'));
+      m.emissive.set(on ? col : '#000'); m.emissiveIntensity = on ? 1.2 : 0;
+      if (d._glow) { d._glow.visible = d._pool.visible = on; d._glow.material.color.copy(col); d._pool.material.color.copy(col); d._pool.material.opacity = 0.25 + 0.55 * lvl; }
+    } else {
+      if (d._glow) d._glow.visible = d._pool.visible = false;
+      const al = sum.cls === 'alert', hot = sum.cls === 'hot' || sum.cls === 'on';
+      m.color.set(!s ? '#999' : al ? '#e53935' : hot ? '#ff8a65' : '#e0e4ea');
+      m.emissive.set(al ? '#e53935' : '#000'); m.emissiveIntensity = al ? 0.8 : 0;
+    }
+    if (d._leaf) { const open = isOn(d.e); d._leaf.pivot.rotation.y = d._leaf.pivot.userData.base + (open ? (d.extra.flip ? -1.2 : 1.2) : 0); d._leaf.leaf.material.color.set(open ? '#c62828' : '#4a2a1e'); }
+    if (d._screen) { const on = s && !['off', 'standby', 'unavailable'].includes(s.state); d._screen.material.emissive.set(on ? '#3a6ea5' : '#000'); d._screen.material.emissiveIntensity = on ? 1.4 : 0; }
+  }
+  for (const rm of roomMeshes) {
+    const { room, floor, base } = rm.userData;
+    const t = roomTemp(floor, room), hc = settings.heat ? heatColor(t) : null;
+    const anyOn = cfg.devices.some(d => d.floor === floor.id && lightOn(d) && devRoom(d) === room);
+    rm.material.color.copy(hc || base);
+    rm.material.emissive.set(anyOn ? '#5a4520' : '#000'); rm.material.emissiveIntensity = anyOn ? 0.35 : 0;
+    if (room._el) room._el.querySelector('span').textContent = Number.isFinite(t) ? `${fmt(t)} °C` : '';
+  }
+  for (const d of cfg.devices) if (d._el) { d._lw = d._el.offsetWidth || d._lw; d._lh = d._el.offsetHeight || d._lh; }
+  renderSummary();
+  if (S.sel) renderSide();
+  if (ED.on && ED.view === '2d') drawPlan();
+}
+function renderSummary() {
+  const lights = cfg.devices.filter(d => d.kind === 'light');
+  const on = lights.filter(lightOn).length, av = lights.filter(d => avail(d.e)).length;
+  const door = cfg.devices.find(d => d.kind === 'door');
+  const chips = [`<span class="chip">Lumini aprinse <b>${on}/${av}</b></span>`];
+  if (door) chips.push(`<span class="chip">${esc(door.name)} <b style="color:${isOn(door.e) ? 'var(--bad)' : 'var(--ok)'}">${isOn(door.e) ? 'deschisă' : avail(door.e) ? 'închisă' : '—'}</b></span>`);
+  for (const f of cfg.floors) {
+    const ts = cfg.devices.filter(d => d.floor === f.id && d.kind === 'temp').map(devTemp).filter(Number.isFinite);
+    if (ts.length) chips.push(`<span class="chip">${esc(f.name)} <b>${fmt(ts.reduce((a, b) => a + b, 0) / ts.length)} °C</b></span>`);
+  }
+  const cl = cfg.devices.find(d => d.kind === 'climate'), cs = cl && st(cl.e);
+  if (cs) chips.push(`<span class="chip">${esc(cl.name)} <b>${cs.attributes.hvac_action === 'heating' ? 'încălzește' : cs.state === 'off' ? 'oprită' : 'în repaus'}</b></span>`);
+  $('summary').innerHTML = chips.join('');
+}
+
+/* =====================================================================
+   ETAJE, CAMERĂ, ETICHETE
+   ===================================================================== */
+const VIEW_DIR = new THREE.Vector3(-0.18, 0.64, 0.75).normalize();
+let MODES = {}, tween = 0;
+const off = {};
+function computeModes() {
+  MODES = {};
+  const boxes = cfg.floors.map(floorBBox), portrait = host.clientWidth < host.clientHeight;
+  const realPlace = Object.fromEntries(cfg.floors.map(g => [g.id, [0, g.y, 0]]));
+  cfg.floors.forEach((f, i) => {
+    const b = boxes[i], ext = Math.max(b.x1 - b.x0, b.z1 - b.z0);
+    MODES[f.id] = { place: realPlace, target: [(b.x0 + b.x1) / 2, f.y + 0.4, (b.z0 + b.z1) / 2], dist: ext * 1.3 + 4, only: f.id };
+  });
+  const place = {}; let cursor = 0, x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  cfg.floors.forEach((f, i) => {
+    const b = boxes[i];
+    if (portrait) { place[f.id] = [0, 0, -cursor - (i ? b.z1 : 0)]; cursor += (b.z1 - b.z0) + 2; }
+    else { place[f.id] = [i ? cursor - b.x0 : 0, 0, 0]; cursor = (i ? cursor : b.x0) + (b.x1 - b.x0) + 1.2; }
+    const P = place[f.id]; x0 = Math.min(x0, b.x0 + P[0]); x1 = Math.max(x1, b.x1 + P[0]); z0 = Math.min(z0, b.z0 + P[2]); z1 = Math.max(z1, b.z1 + P[2]);
+  });
+  const aspect = Math.max(0.5, host.clientWidth / Math.max(1, host.clientHeight));
+  MODES.toate = { place, target: [(x0 + x1) / 2, 0.4, (z0 + z1) / 2], dist: Math.max((x1 - x0) / aspect, z1 - z0) * 1.15 + 5 };
+}
+const modeNow = () => {
+  if (ED.on && ED.view === '3d') return MODES[ED.floorId] || MODES.toate;
+  return MODES[settings.floor] || MODES.toate;
+};
+function buildFloorSeg() {
+  const seg = $('floorSeg');
+  if (settings.floor !== 'toate' && !floorById(settings.floor)) settings.floor = 'toate';
+  seg.innerHTML = cfg.floors.map(f => `<button type="button" data-f="${esc(f.id)}">${esc(f.name)}</button>`).join('') + '<button type="button" data-f="toate">Toate</button>';
+  for (const b of seg.children) b.setAttribute('aria-pressed', String(b.dataset.f === settings.floor));
+}
+function applyFloorMode(animate = true) {
+  if (animate) tween = 70;
+  for (const b of $('floorSeg').children) b.setAttribute('aria-pressed', String(b.dataset.f === settings.floor));
+  const m = modeNow();
+  for (const f of cfg.floors) {
+    const g = floorGroups[f.id]; if (!g) continue;
+    g.visible = !m.only || m.only === f.id;
+    if (g.userData.roofGroup) g.userData.roofGroup.visible = settings.roof && !ED.on;
+  }
+}
+const floorVisible = id => floorGroups[id] && floorGroups[id].visible;
+
+const v3 = new THREE.Vector3();
+function updateLabels() {
+  const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
+  const shown = [];
+  for (const d of cfg.devices) {
+    if (!d._el) continue;
+    if (!floorVisible(d.floor)) { d._el.style.display = 'none'; continue; }
+    d._mesh.getWorldPosition(v3); v3.y += 0.18; v3.project(camera);
+    if (v3.z > 1 || Math.abs(v3.x) > 1.2 || Math.abs(v3.y) > 1.2) { d._el.style.display = 'none'; continue; }
+    d._el.style.display = '';
+    shown.push({ d, x: (v3.x + 1) / 2 * w, y: (1 - v3.y) / 2 * h, z: v3.z });
+  }
+  shown.sort((a, b) => b.y - a.y);
+  const placed = [];
+  for (const it of shown) {
+    const lw = it.d._lw || 120, lh = it.d._lh || 24;
+    let y = it.y;
+    for (let k = 0; k < 6; k++) {
+      const hit = placed.find(p => Math.abs(p.x - it.x) < (p.w + lw) / 2 + 2 && y > p.y - p.h - 2 && y - lh < p.y + 2);
+      if (!hit || it.y - (hit.y - hit.h - 2) > 70) break;
+      y = hit.y - hit.h - 2;
+    }
+    placed.push({ x: it.x, y, w: lw, h: lh });
+    it.d._el.style.transform = `translate(${it.x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`;
+    it.d._el.style.zIndex = String(1000 - Math.round(it.z * 1000));
+  }
+  for (const f of cfg.floors) for (const r of f.rooms) {
+    if (!r._el || !floorGroups[f.id]) continue;
+    if (!floorVisible(f.id)) { r._el.style.display = 'none'; continue; }
+    v3.set(r._c[0], 0.05, r._c[1]); floorGroups[f.id].localToWorld(v3); v3.project(camera);
+    if (v3.z > 1) { r._el.style.display = 'none'; continue; }
+    r._el.style.display = ''; r._el.style.left = ((v3.x + 1) / 2 * w) + 'px'; r._el.style.top = ((1 - v3.y) / 2 * h) + 'px';
+  }
+}
+function resize() {
+  const w = host.clientWidth, h = host.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w < 760 ? 55 : 42; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', () => { resize(); computeModes(); tween = 70; if (ED.on && ED.view === '2d') { fitPlan(); drawPlan(); } });
+resize();
+
+const tgtV = new THREE.Vector3(), dirV = new THREE.Vector3(), sunOff = new THREE.Vector3(-8, 16, 11);
+function frame() {
+  const m = modeNow();
+  for (const f of cfg.floors) {
+    const g = floorGroups[f.id]; if (!g) continue;
+    const want = (m.place && m.place[f.id]) || [0, f.y, 0], o = off[f.id] || (off[f.id] = want.slice());
+    for (let k = 0; k < 3; k++) o[k] += (want[k] - o[k]) * 0.12;
+    g.position.set(o[0], o[1], o[2]);
+  }
+  if (tween > 0) {
+    tween--;
+    tgtV.set(...m.target);
+    const delta = tgtV.clone().sub(controls.target).multiplyScalar(0.1);
+    controls.target.add(delta); camera.position.add(delta);
+    dirV.copy(camera.position).sub(controls.target);
+    dirV.setLength(dirV.length() + (m.dist - dirV.length()) * 0.1);
+    camera.position.copy(controls.target).add(dirV);
+  }
+  sun.target.position.copy(controls.target); sun.position.copy(controls.target).add(sunOff);
+  controls.update();
+  if (!(ED.on && ED.view === '2d')) { renderer.render(scene, camera); updateLabels(); }
+  requestAnimationFrame(frame);
+}
+
+/* =====================================================================
+   SELECȚIE ȘI PANOU LATERAL (mod vizualizare)
+   ===================================================================== */
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+let downAt = null;
+renderer.domElement.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!downAt) return;
+  if (Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  const vis = o => { for (let p = o; p; p = p.parent) if (p.visible === false) return false; return true; };
+  const hits = ray.intersectObjects([...pickables, ...roomMeshes], false).filter(h => vis(h.object));
+  const o = hits[0] && hits[0].object;
+  if (ED.on) { if (o && o.userData.dev) edSelect({ t: 'dev', id: o.userData.dev.id }); else if (o && o.userData.room) edSelect({ t: 'room', id: o.userData.room.id }); return; }
+  if (!o) { select(null); return; }
+  if (o.userData.dev) select({ dev: o.userData.dev });
+  else if (o.userData.room) select({ room: o.userData.room, floor: o.userData.floor });
+});
+function select(sel) {
+  S.sel = sel;
+  $('side').classList.toggle('show', !!sel);
+  if (sel && sel.dev) sparkData = null;
+  refreshVisuals();
+  if (sel && sel.dev) loadSpark(panelOf(sel.dev).history);
+}
+$('sideClose').addEventListener('click', () => select(null));
+
+async function call(domain, service, data, entity) {
+  if (!S.conn) return toast('Nu există conexiune la Home Assistant.', true);
+  try {
+    const m = { type: 'call_service', domain, service, service_data: data || {} };
+    if (entity) m.target = { entity_id: entity };
+    await S.conn.send(m);
+  } catch (e) { toast(e.message || String(e), true); throw e; }
+}
+function rowValue(d, r) {
+  const e = r.e || d.e, s = st(e);
+  if (!s) return '—';
+  if (r.attr) { const v = s.attributes[r.attr]; if (v === undefined || v === null) return '—'; return (typeof v === 'number' && r.dec !== '' && r.dec !== undefined ? v.toFixed(+r.dec) : String(v)) + (r.unit ? ' ' + r.unit : ''); }
+  const out = fmtState(e, r.dec);
+  return r.unit ? out.replace(/ \S+$/, '') + ' ' + r.unit : out;
+}
+function renderSide() {
+  const body = $('sideBody'), sel = S.sel; if (!sel) return;
+  if (sel.room) {
+    const r = sel.room, f = sel.floor, devs = cfg.devices.filter(d => d.floor === f.id && devRoom(d) === r), t = roomTemp(f, r);
+    const lights = devs.filter(d => d.kind === 'light' && avail(d.e));
+    body.innerHTML = `<h2>${esc(r.name)}</h2><div class="meta">${esc(f.name)}${Number.isFinite(t) ? ' · ' + fmt(t) + ' °C' : ''}</div>
+      ${lights.length ? `<div class="btns" style="margin-bottom:8px"><button class="btn sm" data-act="room-on">Aprinde tot</button><button class="btn sm" data-act="room-off">Stinge tot</button></div>` : ''}
+      <ul class="devlist">${devs.map(d => `<li data-id="${d.id}"><span>${esc(d.name)}</span><span class="st">${esc(devSummary(d).txt)}</span></li>`).join('') || '<li>Niciun senzor în această cameră.</li>'}</ul>`;
+    body.querySelectorAll('li[data-id]').forEach(li => li.addEventListener('click', () => select({ dev: cfg.devices.find(d => d.id === li.dataset.id) })));
+    const bOn = body.querySelector('[data-act=room-on]'), bOff = body.querySelector('[data-act=room-off]');
+    if (bOn) bOn.onclick = () => lights.forEach(d => call('light', 'turn_on', {}, d.e));
+    if (bOff) bOff.onclick = () => lights.forEach(d => call('light', 'turn_off', {}, d.e));
+    return;
+  }
+  const d = sel.dev, s = st(d.e), sum = devSummary(d), room = devRoom(d), P = panelOf(d), a = s ? s.attributes : {};
+  const dom = (d.e || '').split('.')[0];
+  let html = `<h2>${esc(d.name)}</h2><div class="meta">${room ? esc(room.name) + ' · ' : ''}${esc((floorById(d.floor) || {}).name || '')}${s && s.last_changed ? ' · ' + ago(s.last_changed) : ''}<br>${esc(d.e || 'fără entitate')}</div>`;
+  html += `<div class="big">${esc(sum.txt)}</div>`;
+  if (P.history) html += `<canvas class="spark" id="spark"></canvas><div class="meta" id="sparkInfo">Ultimele 24 de ore</div>`;
+  html += P.rows.map(r => `<div class="row"><span>${esc(r.label || (r.attr ? r.attr : fname(r.e || d.e)))}</span><span class="v">${esc(rowValue(d, r))}</span></div>`).join('');
+  const A = P.actions || {};
+  if (s && s.state !== 'unavailable') {
+    if (A.toggle) html += `<div class="row"><span>Pornit / oprit</span><button class="btn sm primary" data-act="toggle">${['on', 'playing', 'heat', 'open'].includes(s.state) || (dom === 'media_player' && s.state !== 'off') ? 'Oprește' : 'Pornește'}</button></div>`;
+    if (A.brightness && dom === 'light' && s.state === 'on' && Number.isFinite(a.brightness)) html += `<div class="row" style="display:block"><span>Luminozitate ${Math.round(a.brightness / 2.55)}%</span><input type="range" min="1" max="100" value="${Math.round(a.brightness / 2.55)}" data-act="bri"></div>`;
+    if (A.climate && dom === 'climate') html += `<div class="row"><span>Țintă</span><span class="btns"><button class="btn sm" data-act="t-">−</button><b>${fmt(a.temperature)} °C</b><button class="btn sm" data-act="t+">+</button></span></div>
+      <div class="row"><span>Mod</span><span class="btns"><button class="btn sm${s.state === 'off' ? ' primary' : ''}" data-act="off">Oprit</button><button class="btn sm${s.state === 'heat' ? ' primary' : ''}" data-act="heat">Încălzire</button></span></div>`;
+  }
+  const custom = A.custom || [];
+  if (custom.length) html += `<div class="btns" style="margin-top:10px">${custom.map((c, i) => c.link ? `<a class="btn sm" href="${esc(c.link)}" target="_top">${esc(c.label || 'Deschide')}</a>` : `<button class="btn sm" data-custom="${i}">${esc(c.label || c.service)}</button>`).join('')}</div>`;
+  if (!s && d.e) html += '<p class="note">Entitatea nu există (încă) în Home Assistant.</p>';
+  body.innerHTML = html;
+  const q = k => body.querySelector(`[data-act="${k}"]`);
+  if (q('toggle')) q('toggle').onclick = () => call(['light', 'switch', 'fan', 'input_boolean', 'cover', 'media_player'].includes(dom) ? dom : 'homeassistant', 'toggle', {}, d.e).catch(() => {});
+  if (q('bri')) q('bri').onchange = ev => call('light', 'turn_on', { brightness_pct: +ev.target.value }, d.e).catch(() => {});
+  if (q('t-')) q('t-').onclick = () => call('climate', 'set_temperature', { temperature: (a.temperature || 20) - (a.target_temp_step || 0.5) }, d.e).catch(() => {});
+  if (q('t+')) q('t+').onclick = () => call('climate', 'set_temperature', { temperature: (a.temperature || 20) + (a.target_temp_step || 0.5) }, d.e).catch(() => {});
+  if (q('off')) q('off').onclick = () => call('climate', 'set_hvac_mode', { hvac_mode: 'off' }, d.e).catch(() => {});
+  if (q('heat')) q('heat').onclick = () => call('climate', 'set_hvac_mode', { hvac_mode: 'heat' }, d.e).catch(() => {});
+  body.querySelectorAll('[data-custom]').forEach(b => b.onclick = () => {
+    const c = custom[+b.dataset.custom], [dm, sv] = String(c.service || '').split('.');
+    let data = {}; try { data = c.data ? JSON.parse(c.data) : {}; } catch (e) { return toast('Datele butonului nu sunt JSON valid.', true); }
+    if (!dm || !sv) return toast('Serviciul trebuie scris ca domeniu.serviciu (ex.: light.turn_on).', true);
+    call(dm, sv, data, d.e).then(() => toast(`${c.label || c.service}: trimis.`)).catch(() => {});
+  });
+  if (sparkData && sparkData.e === P.history) drawSpark();
+}
+let sparkData = null;
+async function loadSpark(e) {
+  if (!S.conn || !e || !st(e)) return;
+  try {
+    const end = new Date(), start = new Date(end - 24 * 3600 * 1000);
+    const r = await S.conn.send({ type: 'history/history_during_period', start_time: start.toISOString(), end_time: end.toISOString(), entity_ids: [e], minimal_response: true, no_attributes: true, significant_changes_only: false });
+    const pts = ((r && r[e]) || []).map(x => [x.lu !== undefined ? x.lu * 1000 : Date.parse(x.last_updated || x.last_changed), parseFloat(x.s !== undefined ? x.s : x.state)]).filter(p => Number.isFinite(p[1]));
+    sparkData = { e, pts, start: +start, end: +end };
+    if (S.sel && S.sel.dev) drawSpark();
+  } catch (err) { /* opțional */ }
+}
+function drawSpark() {
+  const c = $('spark'); if (!c || !sparkData) return;
+  const dpr = window.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight;
+  c.width = W * dpr; c.height = H * dpr;
+  const g = c.getContext('2d'); g.scale(dpr, dpr);
+  const pts = sparkData.pts; if (pts.length < 2) { $('sparkInfo').textContent = 'Fără istoric numeric în ultimele 24 de ore.'; return; }
+  let mn = Infinity, mx = -Infinity; for (const [, v] of pts) { mn = Math.min(mn, v); mx = Math.max(mx, v); }
+  if (mx - mn < 0.5) { mx += 0.25; mn -= 0.25; }
+  const X = t => (t - sparkData.start) / (sparkData.end - sparkData.start) * (W - 4) + 2, Y = v => H - 4 - (v - mn) / (mx - mn) * (H - 8);
+  g.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0288d1'; g.lineWidth = 1.6; g.beginPath();
+  pts.forEach(([t, v], i) => { const x = X(Math.max(t, sparkData.start)), y = Y(v); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+  g.lineTo(X(sparkData.end), Y(pts[pts.length - 1][1])); g.stroke();
+  $('sparkInfo').textContent = `Ultimele 24 de ore · minim ${fmt(mn)} · maxim ${fmt(mx)}${unitOf(sparkData.e)}`;
+}
+
+/* =====================================================================
+   EDITOR
+   ===================================================================== */
+const ED = { on: false, view: '2d', floorId: null, tool: 'select', preset: 'generic', sel: null, snap: 0.05,
+  cam: { s: 60, ox: 0, oy: 0 }, drag: null, undo: [], redo: [], saved: '', creating: null, pointers: new Map() };
+const plan = $('plan'), pctx = plan.getContext('2d');
+const edFloor = () => floorById(ED.floorId) || cfg.floors[0];
+const snapV = v => ED.snap ? r2(Math.round(v / ED.snap) * ED.snap) : r2(v);
+const W2S = (x, z) => [ED.cam.ox + x * ED.cam.s, ED.cam.oy + z * ED.cam.s];
+const S2W = (sx, sy) => [(sx - ED.cam.ox) / ED.cam.s, (sy - ED.cam.oy) / ED.cam.s];
+const strip = o => JSON.parse(JSON.stringify(o, (k, v) => k.startsWith('_') ? undefined : v));
+const cfgForSave = () => strip(cfg);
+const isDirty = () => JSON.stringify(cfgForSave()) !== ED.saved;
+
+function pushUndo() { ED.undo.push(JSON.stringify(cfgForSave())); if (ED.undo.length > 80) ED.undo.shift(); ED.redo = []; }
+let rebuildT = 0;
+function changed(opts = {}) {
+  updateSaveState();
+  if (!opts.keepProps) renderProps();
+  drawPlan();
+  clearTimeout(rebuildT);
+  rebuildT = setTimeout(buildAll, ED.view === '3d' ? 120 : 400);
+}
+function updateSaveState() {
+  const dirty = isDirty(), el = $('saveState');
+  el.textContent = dirty ? 'Modificări nesalvate' : (S.cfgSource === 'ha' ? 'Salvat în Home Assistant' : S.cfgSource === 'local' ? 'Salvat în acest browser' : 'Exemplu (nesalvat)');
+  el.className = 'savestate' + (dirty ? ' dirty' : '');
+  $('btnUndo').disabled = !ED.undo.length; $('btnRedo').disabled = !ED.redo.length;
+}
+function restore(json) { cfg = normalizeCfg(JSON.parse(json)); if (!findSel(ED.sel)) ED.sel = null; if (!floorById(ED.floorId)) ED.floorId = cfg.floors[0].id; fillFloorSel(); buildAll(); changed(); }
+function undo() { if (!ED.undo.length) return; ED.redo.push(JSON.stringify(cfgForSave())); restore(ED.undo.pop()); }
+function redo() { if (!ED.redo.length) return; ED.undo.push(JSON.stringify(cfgForSave())); restore(ED.redo.pop()); }
+
+function findSel(sel) {
+  if (!sel) return null;
+  if (sel.t === 'dev') return cfg.devices.find(d => d.id === sel.id) || null;
+  const f = edFloor();
+  const list = { room: f.rooms, wall: f.walls, open: f.openings, item: f.items, rail: f.railings }[sel.t];
+  return (list && list.find(x => x.id === sel.id)) || null;
+}
+function edSelect(sel) {
+  if (sel && sel.t === 'dev') { const d = cfg.devices.find(x => x.id === sel.id); if (d && d.floor !== ED.floorId) { ED.floorId = d.floor; fillFloorSel(); if (ED.view === '2d') fitPlan(); else { computeModes(); applyFloorMode(true); } } }
+  ED.sel = sel; renderProps(); drawPlan(); refreshVisuals();
+}
+
+/* ---------- desenarea planului 2D ---------- */
+let drawQ = false;
+function drawPlan() { if (drawQ) return; drawQ = true; requestAnimationFrame(() => { drawQ = false; drawPlanNow(); }); }
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function drawPlanNow() {
+  if (!ED.on || ED.view !== '2d') return;
+  const dpr = window.devicePixelRatio || 1, W = plan.clientWidth, H = plan.clientHeight;
+  if (plan.width !== Math.round(W * dpr) || plan.height !== Math.round(H * dpr)) { plan.width = Math.round(W * dpr); plan.height = Math.round(H * dpr); }
+  const g = pctx; g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const C = { bg: cssv('--plan-bg'), grid: cssv('--grid'), grid2: cssv('--grid2'), wall: cssv('--wall'), ink: cssv('--ink'), muted: cssv('--muted'), accent: cssv('--accent') };
+  g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+  const s = ED.cam.s, f = edFloor();
+  const step = s > 140 ? 0.1 : s > 40 ? 0.5 : 1;
+  const [wx0, wz0] = S2W(0, 0), [wx1, wz1] = S2W(W, H);
+  g.lineWidth = 1;
+  for (let x = Math.floor(wx0 / step) * step; x <= wx1; x += step) { const [sx] = W2S(x, 0); g.strokeStyle = Math.abs(x - Math.round(x)) < 1e-6 ? C.grid2 : C.grid; g.beginPath(); g.moveTo(Math.round(sx) + 0.5, 0); g.lineTo(Math.round(sx) + 0.5, H); g.stroke(); }
+  for (let z = Math.floor(wz0 / step) * step; z <= wz1; z += step) { const [, sy] = W2S(0, z); g.strokeStyle = Math.abs(z - Math.round(z)) < 1e-6 ? C.grid2 : C.grid; g.beginPath(); g.moveTo(0, Math.round(sy) + 0.5); g.lineTo(W, Math.round(sy) + 0.5); g.stroke(); }
+  const below = cfg.floors[cfg.floors.indexOf(f) - 1];
+  if (below) { g.setLineDash([4, 4]); g.strokeStyle = C.grid2; g.lineWidth = 2; for (const w of below.walls) { g.beginPath(); g.moveTo(...W2S(...w.a)); g.lineTo(...W2S(...w.b)); g.stroke(); } g.setLineDash([]); }
+  for (const r of f.rooms) {
+    if (r.poly.length < 2) continue;
+    g.beginPath(); r.poly.forEach((p, i) => i ? g.lineTo(...W2S(...p)) : g.moveTo(...W2S(...p))); g.closePath();
+    for (const h of r.holes || []) { h.forEach((p, i) => i ? g.lineTo(...W2S(...p)) : g.moveTo(...W2S(...p))); g.closePath(); }
+    g.globalAlpha = 0.55; g.fillStyle = r.color || '#ccc'; g.fill('evenodd'); g.globalAlpha = 1;
+    const isSel = ED.sel && ED.sel.t === 'room' && ED.sel.id === r.id;
+    g.strokeStyle = isSel ? C.accent : 'rgba(0,0,0,.15)'; g.lineWidth = isSel ? 2 : 1; g.stroke();
+    let cx = 0, cz = 0; for (const [x, z] of r.poly) { cx += x; cz += z; }
+    const [lx, ly] = W2S(cx / r.poly.length, cz / r.poly.length);
+    g.fillStyle = C.muted; g.font = '600 11px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText((r.name || '').toUpperCase(), lx, ly);
+  }
+  for (const it of f.items) {
+    g.beginPath();
+    if (it.type === 'cyl') { const [cx, cy] = W2S(it.x, it.z); g.ellipse(cx, cy, Math.max(1, it.w / 2 * s), Math.max(1, it.d / 2 * s), -(it.rot || 0) * Math.PI / 180, 0, Math.PI * 2); }
+    else itemCorners(it).forEach((p, i) => i ? g.lineTo(...W2S(...p)) : g.moveTo(...W2S(...p)));
+    g.closePath();
+    g.globalAlpha = it.glass ? 0.35 : (it.y0 || 0) >= 1.2 ? 0.45 : 0.85; g.fillStyle = it.color || '#999'; g.fill(); g.globalAlpha = 1;
+    const isSel = ED.sel && ED.sel.t === 'item' && ED.sel.id === it.id;
+    g.strokeStyle = isSel ? C.accent : 'rgba(0,0,0,.35)'; g.lineWidth = isSel ? 2 : 1; if ((it.y0 || 0) >= 1.2) g.setLineDash([4, 3]); g.stroke(); g.setLineDash([]);
+    if (it.type === 'stairs') {
+      const n = it.steps || 12; g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1;
+      for (let i = 1; i < n; i++) { const lz = -it.d / 2 + it.d * i / n, a = rotXZ(-it.w / 2, lz, it.rot || 0), b = rotXZ(it.w / 2, lz, it.rot || 0); g.beginPath(); g.moveTo(...W2S(it.x + a[0], it.z + a[1])); g.lineTo(...W2S(it.x + b[0], it.z + b[1])); g.stroke(); }
+      const p0 = rotXZ(0, -it.d / 2 + 0.15, it.rot || 0), p1 = rotXZ(0, it.d / 2 - 0.15, it.rot || 0);
+      g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.moveTo(...W2S(it.x + p0[0], it.z + p0[1])); g.lineTo(...W2S(it.x + p1[0], it.z + p1[1])); g.stroke();
+      const [ax, ay] = W2S(it.x + p1[0], it.z + p1[1]); g.beginPath(); g.arc(ax, ay, 4, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill();
+    }
+    if (s > 55 && it.name && it.w * s > 40) { const [cx, cy] = W2S(it.x, it.z); g.fillStyle = 'rgba(255,255,255,.95)'; g.font = '11px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(it.name, cx, cy); }
+  }
+  for (const w of f.walls) {
+    const isSel = ED.sel && ED.sel.t === 'wall' && ED.sel.id === w.id;
+    g.strokeStyle = isSel ? C.accent : C.wall; g.lineWidth = Math.max(2, (w.ext ? 0.22 : 0.12) * s); g.lineCap = 'square';
+    g.beginPath(); g.moveTo(...W2S(...w.a)); g.lineTo(...W2S(...w.b)); g.stroke();
+  }
+  g.lineCap = 'butt';
+  for (const r of f.railings) { const isSel = ED.sel && ED.sel.t === 'rail' && ED.sel.id === r.id; g.strokeStyle = isSel ? C.accent : '#8a5a3a'; g.lineWidth = 3; g.setLineDash([6, 4]); g.beginPath(); g.moveTo(...W2S(...r.a)); g.lineTo(...W2S(...r.b)); g.stroke(); g.setLineDash([]); }
+  for (const o of f.openings) {
+    const w = f.walls.find(x => x.id === o.wall); if (!w) continue;
+    const len = wallLen(w) || 1, dx = (w.b[0] - w.a[0]) / len, dz = (w.b[1] - w.a[1]) / len;
+    const a = [w.a[0] + dx * (o.t - o.w / 2), w.a[1] + dz * (o.t - o.w / 2)], b = [w.a[0] + dx * (o.t + o.w / 2), w.a[1] + dz * (o.t + o.w / 2)];
+    g.strokeStyle = C.bg; g.lineWidth = Math.max(4, (w.ext ? 0.22 : 0.12) * s + 2);
+    g.beginPath(); g.moveTo(...W2S(...a)); g.lineTo(...W2S(...b)); g.stroke();
+    const isSel = ED.sel && ED.sel.t === 'open' && ED.sel.id === o.id;
+    g.strokeStyle = isSel ? C.accent : o.type === 'fereastra' ? '#4fa3e0' : o.type === 'intrare' ? '#c0622f' : C.muted; g.lineWidth = isSel ? 2.5 : 1.5;
+    if (o.type === 'fereastra') { for (const k of [-0.04, 0.04]) { g.beginPath(); g.moveTo(...W2S(a[0] - dz * k, a[1] + dx * k)); g.lineTo(...W2S(b[0] - dz * k, b[1] + dx * k)); g.stroke(); } }
+    else if (o.type !== 'gol') { const [ax, ay] = W2S(...a), ang = Math.atan2(dz, dx); g.beginPath(); g.moveTo(ax, ay); g.arc(ax, ay, o.w * s, ang, ang + Math.PI / 2); g.closePath(); g.stroke(); }
+    else { g.setLineDash([3, 3]); g.beginPath(); g.moveTo(...W2S(...a)); g.lineTo(...W2S(...b)); g.stroke(); g.setLineDash([]); }
+  }
+  for (const d of cfg.devices.filter(x => x.floor === f.id)) {
+    const [x, y] = W2S(...d.pos), rc = devColor(d), sum = devSummary(d);
+    const col = rc ? rc.color : d.kind === 'light' ? (lightOn(d) ? '#ffcc4d' : '#9aa3ab') : sum.cls === 'alert' ? '#e53935' : C.accent;
+    g.beginPath(); g.arc(x, y, 8, 0, Math.PI * 2); g.fillStyle = col; g.fill(); g.lineWidth = 2; g.strokeStyle = '#fff'; g.stroke();
+    if (ED.sel && ED.sel.t === 'dev' && ED.sel.id === d.id) { g.beginPath(); g.arc(x, y, 12, 0, Math.PI * 2); g.strokeStyle = C.accent; g.lineWidth = 2.5; g.stroke(); }
+    if (s >= 45 || (ED.sel && ED.sel.id === d.id)) {   // la zoom mic doar punctele, ca să nu se suprapună
+      g.fillStyle = C.ink; g.font = '600 11px system-ui, sans-serif'; g.textAlign = 'left'; g.textBaseline = 'middle';
+      g.fillText(`${d.name || '?'} · ${r2(d.y)} m`, x + 13, y);
+    }
+  }
+  for (const h of handles()) {
+    const [x, y] = W2S(h.x, h.z); g.fillStyle = h.kind === 'mid' ? 'rgba(255,255,255,.75)' : '#fff'; g.strokeStyle = C.accent; g.lineWidth = 2;
+    if (h.kind === 'rot' || h.kind === 'mid') { g.beginPath(); g.arc(x, y, h.kind === 'mid' ? 4 : 6, 0, Math.PI * 2); g.fill(); g.stroke(); }
+    else { g.fillRect(x - 5, y - 5, 10, 10); g.strokeRect(x - 5, y - 5, 10, 10); }
+  }
+  if (ED.creating) {
+    const c = ED.creating; g.strokeStyle = C.accent; g.lineWidth = 2; g.setLineDash([6, 4]);
+    if (c.type === 'room') { const [ax, ay] = W2S(...c.a), [bx, by] = W2S(...c.b); g.strokeRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)); }
+    else { g.beginPath(); g.moveTo(...W2S(...c.a)); g.lineTo(...W2S(...c.b)); g.stroke(); }
+    g.setLineDash([]);
+    const [tx, ty] = W2S(...c.b); g.fillStyle = C.ink; g.font = '600 12px system-ui'; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    g.fillText(c.type === 'room' ? `${r2(Math.abs(c.b[0] - c.a[0]))} × ${r2(Math.abs(c.b[1] - c.a[1]))} m` : `${r2(Math.hypot(c.b[0] - c.a[0], c.b[1] - c.a[1]))} m`, tx + 10, ty - 10);
+  }
+  g.fillStyle = C.muted; g.font = '11px system-ui'; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+  g.fillText(`${f.name} · grilă ${step >= 1 ? '1 m' : step * 100 + ' cm'}${below ? ' · linia punctată = ' + below.name : ''}`, 14, H - 14);
+}
+function handles() {
+  const sel = ED.sel, o = findSel(sel); if (!o) return [];
+  const out = [];
+  if (sel.t === 'room') {
+    o.poly.forEach((p, i) => out.push({ kind: 'vtx', i, x: p[0], z: p[1] }));
+    o.poly.forEach((p, i) => { const q = o.poly[(i + 1) % o.poly.length]; out.push({ kind: 'mid', i, x: (p[0] + q[0]) / 2, z: (p[1] + q[1]) / 2 }); });
+  } else if (sel.t === 'wall' || sel.t === 'rail') out.push({ kind: 'end', i: 0, x: o.a[0], z: o.a[1] }, { kind: 'end', i: 1, x: o.b[0], z: o.b[1] });
+  else if (sel.t === 'item') {
+    const c = rotXZ(o.w / 2, o.d / 2, o.rot || 0), r = rotXZ(0, -o.d / 2 - 0.35, o.rot || 0);
+    out.push({ kind: 'size', x: o.x + c[0], z: o.z + c[1] }, { kind: 'rot', x: o.x + r[0], z: o.z + r[1] });
+  } else if (sel.t === 'open') {
+    const w = edFloor().walls.find(x => x.id === o.wall);
+    if (w) { const len = wallLen(w) || 1, dx = (w.b[0] - w.a[0]) / len, dz = (w.b[1] - w.a[1]) / len; for (const k of [-1, 1]) out.push({ kind: 'oend', i: k, x: w.a[0] + dx * (o.t + k * o.w / 2), z: w.a[1] + dz * (o.t + k * o.w / 2) }); }
+  }
+  return out;
+}
+function fitPlan() {
+  const f = edFloor(), b = floorBBox(f), W = plan.clientWidth || window.innerWidth, H = plan.clientHeight || window.innerHeight;
+  const narrow = W < 760, left = 20, right = narrow ? 20 : 400, top = narrow ? 180 : 132, bottom = narrow ? H * 0.48 + 10 : 40;
+  const aw = Math.max(100, W - left - right), ah = Math.max(100, H - top - bottom);
+  const s = Math.min(aw / Math.max(1, b.x1 - b.x0 + 1), ah / Math.max(1, b.z1 - b.z0 + 1));
+  ED.cam.s = clamp(s, 15, 400);
+  ED.cam.ox = left + aw / 2 - (b.x0 + b.x1) / 2 * ED.cam.s;
+  ED.cam.oy = top + ah / 2 - (b.z0 + b.z1) / 2 * ED.cam.s;
+}
+
+/* ---------- click pe plan ---------- */
+function hitTest(px, pz) {
+  const f = edFloor(), tol = 9 / ED.cam.s;
+  for (const h of handles()) if (Math.hypot(px - h.x, pz - h.z) < tol * 1.3) return { handle: h };
+  for (const d of cfg.devices.filter(x => x.floor === f.id).reverse()) if (Math.hypot(px - d.pos[0], pz - d.pos[1]) < Math.max(tol * 1.3, 0.1)) return { sel: { t: 'dev', id: d.id } };
+  for (const o of f.openings) {
+    const w = f.walls.find(x => x.id === o.wall); if (!w) continue;
+    const pr = segProj(px, pz, w.a, w.b); if (pr.dist < Math.max(tol, 0.12) && Math.abs(pr.t * pr.len - o.t) <= o.w / 2) return { sel: { t: 'open', id: o.id } };
+  }
+  for (const it of f.items.slice().reverse()) { const [lx, lz] = unrotXZ(px - it.x, pz - it.z, it.rot || 0); if (Math.abs(lx) <= it.w / 2 && Math.abs(lz) <= it.d / 2) return { sel: { t: 'item', id: it.id } }; }
+  for (const w of f.walls) if (segProj(px, pz, w.a, w.b).dist < Math.max(tol, (w.ext ? 0.11 : 0.06) + 2 / ED.cam.s)) return { sel: { t: 'wall', id: w.id } };
+  for (const r of f.railings) if (segProj(px, pz, r.a, r.b).dist < tol) return { sel: { t: 'rail', id: r.id } };
+  for (const r of f.rooms.slice().reverse()) if (pointInPoly(px, pz, r.poly)) return { sel: { t: 'room', id: r.id } };
+  return null;
+}
+function snapPoint(x, z, except) {   // magnet la colțuri de camere / capete de pereți, altfel la grilă
+  const f = edFloor(), tol = 10 / ED.cam.s;
+  let best = null, bd = tol;
+  const test = p => { if (p === except) return; const dd = Math.hypot(p[0] - x, p[1] - z); if (dd < bd) { bd = dd; best = p; } };
+  for (const w of f.walls) { test(w.a); test(w.b); }
+  for (const r of f.rooms) r.poly.forEach(test);
+  return best ? [best[0], best[1]] : [snapV(x), snapV(z)];
+}
+const evPt = e => { const r = plan.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+plan.addEventListener('wheel', e => {
+  e.preventDefault();
+  const [sx, sy] = evPt(e), [wx, wz] = S2W(sx, sy), k = Math.exp(-e.deltaY * 0.0015);
+  ED.cam.s = clamp(ED.cam.s * k, 10, 500); ED.cam.ox = sx - wx * ED.cam.s; ED.cam.oy = sy - wz * ED.cam.s; drawPlan();
+}, { passive: false });
+plan.addEventListener('pointerdown', e => {
+  try { plan.setPointerCapture(e.pointerId); } catch (err) { /* ignorat */ }
+  ED.pointers.set(e.pointerId, evPt(e));
+  if (ED.pointers.size === 2) { const [a, b] = [...ED.pointers.values()]; ED.creating = null; ED.drag = { type: 'pinch', d0: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, s0: ED.cam.s, c0: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], o0: [ED.cam.ox, ED.cam.oy] }; return; }
+  const [sx, sy] = evPt(e), [wx, wz] = S2W(sx, sy), f = edFloor();
+  if (e.button === 1 || e.button === 2 || e.altKey) { ED.drag = { type: 'pan', sx, sy, ox: ED.cam.ox, oy: ED.cam.oy }; return; }
+  const t = ED.tool;
+  if (t === 'room' || t === 'wall') {
+    const a = t === 'wall' ? snapPoint(wx, wz) : [snapV(wx), snapV(wz)];
+    ED.creating = { type: t, a, b: a.slice() }; ED.drag = { type: 'create' }; drawPlan(); return;
+  }
+  if (t === 'door' || t === 'window') {
+    let best = null; for (const w of f.walls) { const pr = segProj(wx, wz, w.a, w.b); if (pr.dist < 0.4 && (!best || pr.dist < best.pr.dist)) best = { w, pr }; }
+    if (!best) { toast('Dă click mai aproape de un perete.', true); return; }
+    pushUndo();
+    const len = best.pr.len, width = Math.min(t === 'door' ? 0.8 : 1.2, len);
+    const o = { id: uid('o'), wall: best.w.id, t: r2(clamp(snapV(best.pr.t * len), width / 2, len - width / 2)), w: width, type: t === 'door' ? 'usa' : 'fereastra' };
+    f.openings.push(o); setTool('select'); edSelect({ t: 'open', id: o.id }); changed(); return;
+  }
+  if (t === 'item') {
+    pushUndo();
+    const p = PRESETS[ED.preset] || PRESETS.generic;
+    const it = { id: uid('i'), type: p.type || 'box', name: p.n, x: snapV(wx), z: snapV(wz), w: p.w, d: p.d, h: p.h, y0: p.y0 || 0, rot: 0, color: p.color, glass: !!p.glass };
+    if (it.type === 'stairs') it.steps = p.steps;
+    f.items.push(it); setTool('select'); edSelect({ t: 'item', id: it.id }); changed(); return;
+  }
+  if (t === 'dev') {
+    pushUndo();
+    const d = { id: uid('d'), e: '', kind: 'generic', name: 'Senzor nou', floor: f.id, pos: [snapV(wx), snapV(wz)], y: 1.2, extra: {} };
+    cfg.devices.push(d); setTool('select'); edSelect({ t: 'dev', id: d.id }); changed();
+    setTimeout(() => { const i = document.querySelector('#props [data-k="e"]'); if (i) i.focus(); }, 60); return;
+  }
+  const hit = hitTest(wx, wz);
+  if (hit && hit.handle) { ED.drag = { type: 'handle', h: hit.handle, moved: false, snap: JSON.stringify(cfgForSave()) }; return; }
+  if (hit && hit.sel) {
+    if (!ED.sel || ED.sel.t !== hit.sel.t || ED.sel.id !== hit.sel.id) edSelect(hit.sel);
+    ED.drag = { type: 'move', start: [wx, wz], orig: clone(strip(findSel(hit.sel))), moved: false, snap: JSON.stringify(cfgForSave()) };
+    return;
+  }
+  if (ED.sel) edSelect(null);
+  ED.drag = { type: 'pan', sx, sy, ox: ED.cam.ox, oy: ED.cam.oy };
+});
+plan.addEventListener('pointermove', e => {
+  if (ED.pointers.has(e.pointerId)) ED.pointers.set(e.pointerId, evPt(e));
+  const dr = ED.drag; if (!dr) return;
+  const [sx, sy] = evPt(e), [wx, wz] = S2W(sx, sy), f = edFloor();
+  if (dr.type === 'pinch') {
+    if (ED.pointers.size < 2) return;
+    const [a, b] = [...ED.pointers.values()], d1 = Math.hypot(a[0] - b[0], a[1] - b[1]), c = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const s = clamp(dr.s0 * d1 / dr.d0, 10, 500), wc = [(dr.c0[0] - dr.o0[0]) / dr.s0, (dr.c0[1] - dr.o0[1]) / dr.s0];
+    ED.cam.s = s; ED.cam.ox = c[0] - wc[0] * s; ED.cam.oy = c[1] - wc[1] * s; drawPlan(); return;
+  }
+  if (dr.type === 'pan') { ED.cam.ox = dr.ox + (sx - dr.sx); ED.cam.oy = dr.oy + (sy - dr.sy); drawPlan(); return; }
+  if (dr.type === 'create') {
+    const c = ED.creating; if (!c) return;
+    c.b = c.type === 'wall' ? snapPoint(wx, wz) : [snapV(wx), snapV(wz)];
+    if (c.type === 'wall' && e.shiftKey) { if (Math.abs(c.b[0] - c.a[0]) > Math.abs(c.b[1] - c.a[1])) c.b[1] = c.a[1]; else c.b[0] = c.a[0]; }
+    drawPlan(); return;
+  }
+  const o = findSel(ED.sel); if (!o) return;
+  if (dr.type === 'handle') {
+    const h = dr.h; dr.moved = true;
+    if (ED.sel.t === 'room') {
+      if (h.kind === 'mid') { o.poly.splice(h.i + 1, 0, [snapV(wx), snapV(wz)]); dr.h = { kind: 'vtx', i: h.i + 1 }; }
+      else o.poly[h.i] = snapPoint(wx, wz, o.poly[h.i]);
+    } else if (ED.sel.t === 'wall' || ED.sel.t === 'rail') {
+      const p = snapPoint(wx, wz, h.i ? o.b : o.a), other = h.i ? o.a : o.b;
+      if (e.shiftKey) { if (Math.abs(p[0] - other[0]) > Math.abs(p[1] - other[1])) p[1] = other[1]; else p[0] = other[0]; }
+      if (h.i) o.b = p; else o.a = p;
+    } else if (ED.sel.t === 'item') {
+      if (h.kind === 'size') { const [lx, lz] = unrotXZ(wx - o.x, wz - o.z, o.rot || 0); o.w = Math.max(0.05, snapV(Math.abs(lx) * 2)); o.d = Math.max(0.05, snapV(Math.abs(lz) * 2)); }
+      else { let ang = Math.atan2(-(wx - o.x), -(wz - o.z)) * 180 / Math.PI; ang = e.shiftKey ? Math.round(ang) : Math.round(ang / 15) * 15; o.rot = ((ang % 360) + 360) % 360; }
+    } else if (ED.sel.t === 'open') {
+      const w = f.walls.find(x => x.id === o.wall); if (w) { const pr = segProj(wx, wz, w.a, w.b); o.w = Math.max(0.3, snapV(Math.abs(pr.t * pr.len - o.t) * 2)); }
+    }
+    drawPlan(); return;
+  }
+  if (dr.type === 'move') {
+    const dx = wx - dr.start[0], dz = wz - dr.start[1];
+    if (!dr.moved && Math.hypot(dx, dz) * ED.cam.s < 4) return;
+    dr.moved = true;
+    const sd = v => ED.snap ? Math.round(v / ED.snap) * ED.snap : v, O = dr.orig;
+    switch (ED.sel.t) {
+      case 'dev': o.pos = [snapV(O.pos[0] + dx), snapV(O.pos[1] + dz)]; break;
+      case 'item': o.x = snapV(O.x + dx); o.z = snapV(O.z + dz); break;
+      case 'room': o.poly = O.poly.map(([x, z]) => [r2(x + sd(dx)), r2(z + sd(dz))]); o.holes = (O.holes || []).map(hh => hh.map(([x, z]) => [r2(x + sd(dx)), r2(z + sd(dz))])); break;
+      case 'wall': case 'rail': o.a = [r2(O.a[0] + sd(dx)), r2(O.a[1] + sd(dz))]; o.b = [r2(O.b[0] + sd(dx)), r2(O.b[1] + sd(dz))]; break;
+      case 'open': { const w = f.walls.find(x => x.id === o.wall); if (w) { const pr = segProj(wx, wz, w.a, w.b); o.t = r2(clamp(snapV(pr.t * pr.len), o.w / 2, pr.len - o.w / 2)); } break; }
+    }
+    drawPlan();
+  }
+});
+function endDrag(e) {
+  ED.pointers.delete(e.pointerId);
+  const dr = ED.drag; if (!dr) return;
+  if (dr.type === 'pinch' && ED.pointers.size) return;
+  ED.drag = null;
+  if (dr.type === 'create') {
+    const c = ED.creating; ED.creating = null; const f = edFloor(); if (!c) return;
+    if (c.type === 'room') {
+      const x0 = Math.min(c.a[0], c.b[0]), x1 = Math.max(c.a[0], c.b[0]), z0 = Math.min(c.a[1], c.b[1]), z1 = Math.max(c.a[1], c.b[1]);
+      if (x1 - x0 < 0.3 || z1 - z0 < 0.3) { drawPlan(); return; }
+      pushUndo();
+      const r = { id: uid('r'), name: 'Cameră nouă', color: hslHex(Math.floor(Math.random() * 360), 30, 72), poly: [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], holes: [] };
+      f.rooms.push(r); setTool('select'); edSelect({ t: 'room', id: r.id }); changed(); return;
+    }
+    if (Math.hypot(c.b[0] - c.a[0], c.b[1] - c.a[1]) < 0.15) { drawPlan(); return; }
+    pushUndo();
+    const w = { id: uid('w'), a: c.a, b: c.b, ext: false }; f.walls.push(w); ED.sel = { t: 'wall', id: w.id }; changed(); return;
+  }
+  if ((dr.type === 'move' || dr.type === 'handle') && dr.moved) { ED.undo.push(dr.snap); if (ED.undo.length > 80) ED.undo.shift(); ED.redo = []; changed(); }
+}
+plan.addEventListener('pointerup', endDrag);
+plan.addEventListener('pointercancel', endDrag);
+plan.addEventListener('contextmenu', e => e.preventDefault());
+function hslHex(h, s, l) { s /= 100; l /= 100; const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l), f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1))); return '#' + [f(0), f(8), f(4)].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join(''); }
+
+window.addEventListener('keydown', e => {
+  if (!ED.on) return;
+  const tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+  const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+  if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if (mod && k === 'y') { e.preventDefault(); redo(); return; }
+  if (mod) return;
+  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSel(); return; }
+  if (e.key === 'Escape') { setTool('select'); ED.creating = null; edSelect(null); return; }
+  if (k === 'v') setTool('select'); else if (k === 'c') setTool('room'); else if (k === 'p') setTool('wall'); else if (k === 'o') setTool('item'); else if (k === 's') setTool('dev');
+  else if (k === 'r' && ED.sel && ED.sel.t === 'item') { pushUndo(); const o = findSel(ED.sel); o.rot = ((o.rot || 0) + 90) % 360; changed(); }
+  else if (k === 'd' && ED.sel) { e.preventDefault(); duplicateSel(); }
+});
+function deleteSel() {
+  const sel = ED.sel, f = edFloor(); if (!sel || !findSel(sel)) return;
+  pushUndo();
+  if (sel.t === 'dev') cfg.devices = cfg.devices.filter(d => d.id !== sel.id);
+  if (sel.t === 'room') f.rooms = f.rooms.filter(r => r.id !== sel.id);
+  if (sel.t === 'wall') { f.walls = f.walls.filter(w => w.id !== sel.id); f.openings = f.openings.filter(o => o.wall !== sel.id); }
+  if (sel.t === 'open') f.openings = f.openings.filter(o => o.id !== sel.id);
+  if (sel.t === 'item') f.items = f.items.filter(i => i.id !== sel.id);
+  if (sel.t === 'rail') f.railings = f.railings.filter(r => r.id !== sel.id);
+  ED.sel = null; changed();
+}
+function duplicateSel() {
+  const sel = ED.sel, f = edFloor(), o = findSel(sel); if (!o || !['dev', 'item', 'room'].includes(sel.t)) return;
+  pushUndo(); const c = strip(o);
+  if (sel.t === 'dev') { c.id = uid('d'); c.pos = [r2(c.pos[0] + 0.3), r2(c.pos[1] + 0.3)]; c.name += ' (copie)'; cfg.devices.push(c); }
+  if (sel.t === 'item') { c.id = uid('i'); c.x = r2(c.x + 0.3); c.z = r2(c.z + 0.3); f.items.push(c); }
+  if (sel.t === 'room') { c.id = uid('r'); c.poly = c.poly.map(([x, z]) => [r2(x + 0.5), r2(z + 0.5)]); c.holes = (c.holes || []).map(h => h.map(([x, z]) => [r2(x + 0.5), r2(z + 0.5)])); c.name += ' (copie)'; f.rooms.push(c); }
+  ED.sel = { t: sel.t, id: c.id }; changed();
+}
+
+/* ---------- panoul de proprietăți ---------- */
+const fld = (label, inner, help) => `<div class="fld"><label>${label}</label><div>${inner}</div></div>${help ? `<div class="help">${help}</div>` : ''}`;
+const inp = (k, v, extra = '') => `<input type="text" data-k="${k}" value="${esc(v)}" ${extra}>`;
+const nump = (k, v, step = 0.05, extra = '') => `<input type="number" data-k="${k}" value="${Number.isFinite(+v) && v !== '' ? r2(+v) : ''}" step="${step}" ${extra}>`;
+const selp = (k, v, opts, extra = '') => `<select data-k="${k}" ${extra}>${Object.entries(opts).map(([a, b]) => `<option value="${esc(a)}"${String(v ?? '') === a ? ' selected' : ''}>${esc(b)}</option>`).join('')}</select>`;
+const colp = (k, v) => `<input type="color" data-k="${k}" value="${esc(v || '#999999')}">`;
+const chk = (k, v, label) => `<label style="display:inline-flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" data-k="${k}" ${v ? 'checked' : ''}> ${label}</label>`;
+const entInp = (attr, k, v, ph = '') => `<input type="text" list="entList" ${attr}="${k}" value="${esc(v || '')}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false">`;
+
+function renderProps() {
+  const box = $('props'); if (!ED.on) return;
+  const sel = ED.sel, o = findSel(sel), f = edFloor();
+  let h = '';
+  if (!o) {
+    h += `<h2>${esc(f.name)}</h2><div class="meta">Alege o unealtă din bara de sus sau dă click pe un element din plan.</div>`;
+    h += fld('Nume etaj', inp('f.name', f.name)) + fld('Nivel podea', `<div class="inl">${nump('f.y', f.y, 0.1)}<span class="help">m față de parter</span></div>`) + fld('Înălțime', `<div class="inl">${nump('f.height', f.height, 0.1)}<span class="help">m</span></div>`);
+    h += fld('Acoperiș', chk('f.roof', f.roof, 'în două ape (mansardă)')) + (f.roof ? fld('Perete genunchi', `<div class="inl">${nump('f.knee', f.knee ?? 1, 0.1)}<span class="help">m</span></div>`) : '');
+    h += `<div class="btns" style="margin:10px 0"><button class="btn sm" data-a="addFloor">Etaj nou</button>${cfg.floors.length > 1 ? '<button class="btn sm danger" data-a="delFloor">Șterge etajul</button>' : ''}</div>`;
+    const list = [...cfg.devices.filter(d => d.floor === f.id).map(d => ['dev', d.id, d.name || '(fără nume)', 'senzor']), ...f.rooms.map(r => ['room', r.id, r.name, 'cameră']), ...f.items.map(i => ['item', i.id, i.name || 'obiect', i.type === 'stairs' ? 'scară' : 'obiect'])];
+    h += `<h3>Elemente pe ${esc(f.name)} (${list.length})</h3><ul class="ellist">${list.map(([t, id, n, k]) => `<li data-sel="${t}:${id}"><span>${esc(n)}</span><small>${k}</small></li>`).join('')}</ul>`;
+    h += `<h3>Fișier</h3><div class="btns"><button class="btn sm" data-a="export">Export JSON</button><button class="btn sm" data-a="import">Import JSON</button><button class="btn sm" data-a="reset">Exemplul inclus</button><button class="btn sm danger" data-a="resetEmpty">Schiță goală</button><input type="file" id="impFile" accept=".json,application/json" hidden></div>`;
+    h += `<h3>Scurtături</h3><div class="help">V selectare · C cameră · P perete · O obiect · S senzor · Delete șterge · D duplică · R rotește obiectul 90° · Ctrl+Z / Ctrl+Shift+Z · Shift = linie dreaptă / rotire liberă · rotița = zoom · trage pe gol sau Alt+trage = deplasare plan</div>`;
+  } else if (sel.t === 'room') {
+    h += `<h2>Cameră</h2>` + fld('Nume', inp('name', o.name)) + fld('Culoare podea', colp('color', o.color));
+    h += `<div class="help">Trage colțurile pătrate. Cerculețele de pe laturi adaugă colțuri noi. Trage interiorul camerei ca s-o muți.</div>`;
+    h += `<h3>Colțuri (${o.poly.length})</h3><table class="tbl"><tr><th>#</th><th>x (m)</th><th>z (m)</th><th></th></tr>${o.poly.map((p, i) => `<tr><td>${i + 1}</td><td>${nump('poly.' + i + '.0', p[0])}</td><td>${nump('poly.' + i + '.1', p[1])}</td><td>${o.poly.length > 3 ? `<button class="x" data-a="delVtx" data-i="${i}" title="Șterge colțul">×</button>` : ''}</td></tr>`).join('')}</table>`;
+    if ((o.holes || []).length) h += `<div class="help">Camera are ${o.holes.length} gol(uri) în podea (de ex. golul scării).</div>`;
+    h += `<div class="btns" style="margin-top:10px"><button class="btn sm" data-a="wallsFromRoom">Pereți pe contur</button><button class="btn sm" data-a="dup">Duplică</button><button class="btn sm danger" data-a="del">Șterge camera</button></div>`;
+  } else if (sel.t === 'wall') {
+    h += `<h2>Perete</h2>` + fld('Lungime', `<div class="inl">${nump('_len', wallLen(o))}<span class="help">m</span></div>`) + fld('Exterior', chk('ext', o.ext, 'perete exterior (mai gros)'));
+    h += fld('Capăt A (x, z)', `<div class="inl">${nump('a.0', o.a[0])}${nump('a.1', o.a[1])}</div>`) + fld('Capăt B (x, z)', `<div class="inl">${nump('b.0', o.b[0])}${nump('b.1', o.b[1])}</div>`);
+    const ops = f.openings.filter(x => x.wall === o.id);
+    h += `<h3>Uși și ferestre (${ops.length})</h3><ul class="ellist">${ops.map(x => `<li data-sel="open:${x.id}"><span>${OPEN_TYPES[x.type]}</span><small>${r2(x.w)} m</small></li>`).join('') || '<li>Niciuna. Folosește uneltele Ușă / Fereastră.</li>'}</ul>`;
+    h += `<div class="btns" style="margin-top:10px"><button class="btn sm" data-a="toRail">Transformă în balustradă</button><button class="btn sm danger" data-a="del">Șterge peretele</button></div>`;
+  } else if (sel.t === 'rail') {
+    h += `<h2>Balustradă</h2><div class="help">Trage capetele ca s-o modifici.</div><div class="btns"><button class="btn sm danger" data-a="del">Șterge</button></div>`;
+  } else if (sel.t === 'open') {
+    const devs = cfg.devices.filter(d => d.kind === 'door' && d.extra.opening === o.id);
+    h += `<h2>${OPEN_TYPES[o.type]}</h2>` + fld('Tip', selp('type', o.type, OPEN_TYPES)) + fld('Lățime', `<div class="inl">${nump('w', o.w)}<span class="help">m</span></div>`) + fld('Poziție', `<div class="inl">${nump('t', o.t)}<span class="help">m de la capătul A</span></div>`);
+    h += `<div class="help">${devs.length ? 'Legată de: ' + devs.map(d => esc(d.name)).join(', ') + ' (se deschide în 3D).' : 'Ca ușa să se deschidă în 3D, alege-o la un senzor de tip „Ușă / contact”.'}</div>`;
+    h += `<div class="btns"><button class="btn sm danger" data-a="del">Șterge</button></div>`;
+  } else if (sel.t === 'item') {
+    h += `<h2>${esc(o.name || 'Obiect')}</h2>` + fld('Nume', inp('name', o.name)) + fld('Formă', selp('type', o.type, { box: 'Cutie', cyl: 'Cilindru / rotund', stairs: 'Scară' }));
+    h += fld('Presetare', `<select data-a="preset"><option value="">aplică dimensiuni…</option>${Object.entries(PRESETS).map(([k, p]) => `<option value="${k}">${p.n}</option>`).join('')}</select>`);
+    h += fld('Centru (x, z)', `<div class="inl">${nump('x', o.x)}${nump('z', o.z)}</div>`) + fld('Lățime, adânc.', `<div class="inl">${nump('w', o.w)}${nump('d', o.d)}</div>`);
+    if (o.type === 'stairs') h += fld('Trepte', nump('steps', o.steps || 12, 1, 'min="2" max="40"')) + `<div class="help">Scara urcă în direcția săgeții, până la etajul următor. Rotește cu mânerul rotund sau tasta R.</div>`;
+    else h += fld('Înălțime', `<div class="inl">${nump('h', o.h)}<span class="help">m</span></div>`) + fld('Ridicat', `<div class="inl">${nump('y0', o.y0 || 0)}<span class="help">m de la podea (dulapuri suspendate)</span></div>`);
+    h += fld('Rotire', `<div class="inl">${nump('rot', o.rot || 0, 15)}<span class="help">grade</span></div>`) + fld('Culoare', colp('color', o.color)) + (o.type !== 'stairs' ? fld('Sticlă', chk('glass', o.glass, 'transparent')) : '');
+    h += `<div class="btns" style="margin-top:10px"><button class="btn sm" data-a="rot90">Rotește 90°</button><button class="btn sm" data-a="dup">Duplică</button><button class="btn sm danger" data-a="del">Șterge</button></div>`;
+  } else if (sel.t === 'dev') h += devProps(o);
+  box.innerHTML = h;
+  bindProps(box, o);
+}
+
+function devProps(d) {
+  const f = floorById(d.floor) || edFloor(), P = panelOf(d), kind = KINDS[d.kind] ? d.kind : 'generic';
+  let h = `<h2>${esc(d.name || 'Senzor')}</h2><div class="meta">Acum: ${esc(devSummary(d).txt)}</div>`;
+  h += fld('Entitate', entInp('data-k', 'e', d.e, 'caută: sensor.…, light.…'));
+  h += fld('Nume', inp('name', d.name)) + fld('Tip', selp('kind', kind, Object.fromEntries(Object.entries(KINDS).map(([k, v]) => [k, v.name]))));
+  h += fld('Iconiță', selp('icon', d.icon || '', Object.assign({ '': 'după tip' }, Object.fromEntries(Object.entries(ICONS).map(([k, v]) => [k, v[0]])))));
+  h += fld('Marcaj 3D', `<div class="inl">${selp('shape', d.shape || '', { '': 'după tip', sfera: 'sferă', cub: 'cub', disc: 'disc' })}${nump('size', d.size ?? 1, 0.1, 'min="0.3" max="4" title="Mărime"')}</div>`);
+  h += `<h3>Poziție</h3>` + fld('Etaj', selp('floor', d.floor, Object.fromEntries(cfg.floors.map(x => [x.id, x.name])))) + fld('x, z', `<div class="inl">${nump('pos.0', d.pos[0])}${nump('pos.1', d.pos[1])}</div>`);
+  h += fld('Înălțime', `<div class="inl" style="width:100%"><input type="range" data-k="y" min="0" max="${f.height}" step="0.05" value="${d.y}" style="flex:1">${nump('y', d.y)}</div>`, 'Față de podeaua etajului: ~2.4 = tavan, 1.2 = pe perete, 0.3 = lângă podea. Pe plan o vezi lângă nume.');
+  if (kind === 'tv') h += fld('Orientare ecran', `<div class="inl">${nump('rot', d.rot || 0, 15)}<span class="help">grade</span></div>`);
+  if (kind === 'door') {
+    const ops = f.openings.filter(o => o.type !== 'fereastra').map(o => [o.id, `${OPEN_TYPES[o.type]} · ${r2(o.w)} m`]);
+    h += fld('Ușa din plan', selp('extra.opening', d.extra.opening || '', Object.assign({ '': '— niciuna —' }, Object.fromEntries(ops)))) + fld('Deschidere', chk('extra.flip', d.extra.flip, 'în sens invers'));
+  }
+  const ek = EXTRA_KEYS[kind] || [];
+  if (ek.length) h += `<h3>Entități legate</h3>` + ek.map(([k, n]) => fld(n, entInp('data-k', 'extra.' + k, d.extra[k]))).join('');
+  h += `<h3>Etichetă</h3>` + fld('Text', inp('label', d.label || '', `placeholder="automat: ${esc(devSummary(Object.assign({}, d, { label: '' })).txt)}"`),
+    'Gol = automat. Poți combina text cu <code>{state}</code>, <code>{state:1}</code> (o zecimală), <code>{attr:temperature}</code>, <code>{e:sensor.alt_senzor}</code>, <code>{e:sensor.x:0}</code>.');
+  h += `<h3>La click se afișează</h3>`;
+  h += `<table class="tbl"><tr><th>Entitate (gol = principala)</th><th>Atribut</th><th>Text</th><th>Unit.</th><th>Zec.</th><th></th></tr>${P.rows.map((r, i) => `<tr>
+    <td>${entInp('data-p', `rows.${i}.e`, r.e)}</td><td><input type="text" data-p="rows.${i}.attr" value="${esc(r.attr)}" style="width:76px"></td>
+    <td><input type="text" data-p="rows.${i}.label" value="${esc(r.label)}"></td><td><input type="text" data-p="rows.${i}.unit" value="${esc(r.unit)}" style="width:40px"></td>
+    <td><input type="number" data-p="rows.${i}.dec" value="${esc(r.dec)}" min="0" max="4" style="width:42px"></td><td><button class="x" data-a="delRow" data-i="${i}" title="Șterge rândul">×</button></td></tr>`).join('')}</table>`;
+  h += `<div class="btns" style="margin:6px 0"><button class="btn sm" data-a="addRow">Adaugă rând</button>${d.panel ? '<button class="btn sm" data-a="panelDefault">Revino la implicit</button>' : ''}</div>`;
+  h += fld('Grafic 24 h', entInp('data-p', 'history', P.history, 'fără grafic'));
+  const A = P.actions || {};
+  h += fld('Butoane', `<div class="btns">${[['toggle', 'Pornit/oprit'], ['brightness', 'Luminozitate'], ['climate', 'Termostat']].map(([k, n]) => `<label style="display:inline-flex;gap:4px;align-items:center;font-size:13px"><input type="checkbox" data-p="actions.${k}" ${A[k] ? 'checked' : ''}>${n}</label>`).join('')}</div>`);
+  const custom = A.custom || [];
+  if (custom.length) h += `<table class="tbl"><tr><th>Buton</th><th>Serviciu</th><th>Date JSON (opțional)</th><th></th></tr>${custom.map((c, i) => c.link ? `<tr><td colspan="3">${esc(c.label)} → ${esc(c.link)}</td><td><button class="x" data-a="delCustom" data-i="${i}">×</button></td></tr>` : `<tr>
+    <td><input type="text" data-p="actions.custom.${i}.label" value="${esc(c.label)}" style="width:84px"></td><td><input type="text" data-p="actions.custom.${i}.service" value="${esc(c.service)}" placeholder="light.turn_on"></td>
+    <td><input type="text" data-p="actions.custom.${i}.data" value="${esc(c.data || '')}" placeholder='{"brightness_pct":30}'></td><td><button class="x" data-a="delCustom" data-i="${i}">×</button></td></tr>`).join('')}</table>`;
+  h += `<div class="btns" style="margin:6px 0"><button class="btn sm" data-a="addCustom">Adaugă buton personalizat</button></div><div class="help">Butonul personalizat apelează serviciul pe entitatea principală (ex.: <code>light.turn_on</code> cu <code>{"brightness_pct":30}</code>, <code>script.turn_on</code>).</div>`;
+  h += `<h3>Culori după stare</h3><div class="help">Regulile se verifică de sus în jos; prima potrivită colorează marcajul 3D, iconița și punctul de pe plan. „Lum.” = strălucește. Fără reguli se folosește comportamentul tipului.</div>`;
+  const rules = (d.colors && d.colors.rules) || [];
+  if (rules.length) h += `<table class="tbl"><tr><th>Condiție</th><th>Val.</th><th>Până la</th><th>Altă entitate</th><th></th><th>Lum.</th><th></th></tr>${rules.map((r, i) => `<tr>
+    <td>${selp(`colors.rules.${i}.op`, r.op, RULE_OPS, 'style="width:112px"')}</td>
+    <td><input type="text" data-k="colors.rules.${i}.v" value="${esc(r.v ?? '')}" style="width:50px" ${['on', 'off', 'unavail'].includes(r.op) ? 'disabled' : ''}></td>
+    <td><input type="text" data-k="colors.rules.${i}.v2" value="${esc(r.v2 ?? '')}" style="width:50px" ${r.op === 'between' ? '' : 'disabled'}></td>
+    <td>${entInp('data-k', `colors.rules.${i}.e`, r.e, 'principala')}</td>
+    <td><input type="color" data-k="colors.rules.${i}.color" value="${esc(r.color || '#e53935')}"></td><td><input type="checkbox" data-k="colors.rules.${i}.glow" ${r.glow ? 'checked' : ''} title="strălucește"></td>
+    <td style="white-space:nowrap"><button class="x" data-a="ruleUp" data-i="${i}" title="Mută mai sus">↑</button><button class="x" data-a="delRule" data-i="${i}" title="Șterge">×</button></td></tr>`).join('')}</table>`;
+  h += `<div class="btns" style="margin:6px 0"><button class="btn sm" data-a="addRule">Adaugă regulă</button><button class="btn sm" data-a="rulePreset">Exemplu: temperatură</button><button class="btn sm" data-a="rulePresetOn">Exemplu: pornit/oprit</button></div>`;
+  h += fld('Culoare implicită', `<div class="inl">${chk('_useDef', !!(d.colors && d.colors.def), 'folosește')}<input type="color" data-k="colors.def" value="${esc((d.colors && d.colors.def) || '#4fc3f7')}"></div>`, 'Când nicio regulă nu se potrivește.');
+  h += `<div class="btns" style="margin-top:14px"><button class="btn sm" data-a="preview">Vezi panoul</button><button class="btn sm" data-a="dup">Duplică</button><button class="btn sm danger" data-a="del">Șterge senzorul</button></div>`;
+  return h;
+}
+
+function setPath(obj, path, val) {
+  const ks = path.split('.'); let o = obj;
+  for (let i = 0; i < ks.length - 1; i++) { const k = ks[i], nk = ks[i + 1]; if (o[k] === undefined || o[k] === null) o[k] = /^\d+$/.test(nk) ? [] : {}; o = o[k]; }
+  o[ks[ks.length - 1]] = val;
+}
+function bindProps(box, o) {
+  const sel = ED.sel, f = edFloor();
+  let burst = false, burstT = 0;
+  const begin = () => { if (!burst) { pushUndo(); burst = true; } clearTimeout(burstT); burstT = setTimeout(() => { burst = false; }, 900); };
+  box.querySelectorAll('[data-k]').forEach(el => {
+    const k = el.dataset.k;
+    const ev = el.type === 'checkbox' || el.tagName === 'SELECT' || el.type === 'color' ? 'change' : 'input';
+    el.addEventListener(ev, () => {
+      let v = el.type === 'checkbox' ? el.checked : (el.type === 'number' || el.type === 'range') ? parseFloat(el.value) : el.value;
+      if ((el.type === 'number' || el.type === 'range') && !Number.isFinite(v)) return;
+      begin();
+      if (k.startsWith('f.')) { setPath(f, k.slice(2), v); if (k === 'f.name') { buildFloorSeg(); fillFloorSel(); } changed({ keepProps: ev === 'input' }); return; }
+      if (!o) return;
+      if (k === '_len') { const L = wallLen(o) || 1, nx = (o.b[0] - o.a[0]) / L, nz = (o.b[1] - o.a[1]) / L; o.b = [r2(o.a[0] + nx * v), r2(o.a[1] + nz * v)]; changed({ keepProps: true }); return; }
+      if (k === '_useDef') { o.colors ||= { rules: [] }; if (v) o.colors.def = box.querySelector('[data-k="colors.def"]').value; else delete o.colors.def; changed({ keepProps: true }); return; }
+      if (k === 'colors.def' && !box.querySelector('[data-k="_useDef"]').checked) return;
+      if (sel.t === 'dev' && k.startsWith('colors.')) o.colors ||= { rules: [] };
+      setPath(o, k, v);
+      if (sel.t === 'dev' && k === 'e') autofillDevice(o);
+      if (sel.t === 'item' && k === 'type' && v === 'stairs' && !o.steps) o.steps = 12;
+      if (sel.t === 'dev' && k === 'y') box.querySelectorAll('[data-k="y"]').forEach(x => { if (x !== el) x.value = v; });
+      const structural = ['kind', 'floor', 'type', 'extra.opening', 'shape', 'ext', 'icon'].includes(k) || k.endsWith('.op') || (k === 'e' && st(v));
+      changed({ keepProps: !structural });
+    });
+  });
+  box.querySelectorAll('[data-p]').forEach(el => {   // câmpurile „La click se afișează”
+    const k = el.dataset.p, ev = el.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(ev, () => {
+      begin();
+      if (!o.panel) o.panel = clone(panelOf(o));
+      let v = el.type === 'checkbox' ? el.checked : el.value;
+      if (k.endsWith('.dec')) v = el.value === '' ? '' : parseInt(el.value, 10);
+      setPath(o.panel, k, v);
+      changed({ keepProps: true });
+    });
+  });
+  box.querySelectorAll('[data-sel]').forEach(li => li.addEventListener('click', () => { const [t, id] = li.dataset.sel.split(':'); edSelect({ t, id }); }));
+  box.querySelectorAll('[data-a]').forEach(b => {
+    const a = b.dataset.a;
+    b.addEventListener(b.tagName === 'SELECT' ? 'change' : 'click', () => {
+      const i = +b.dataset.i;
+      switch (a) {
+        case 'del': deleteSel(); return;
+        case 'dup': duplicateSel(); return;
+        case 'preview': { const d = o; setEdView('3d'); setTimeout(() => { S.sel = { dev: d }; $('side').classList.add('show'); renderSide(); loadSpark(panelOf(d).history); }, 200); return; }
+        case 'rot90': pushUndo(); o.rot = ((o.rot || 0) + 90) % 360; break;
+        case 'preset': { const p = PRESETS[b.value]; if (!p) return; pushUndo(); Object.assign(o, { type: p.type || 'box', name: p.n, w: p.w, d: p.d, h: p.h, y0: p.y0 || 0, color: p.color, glass: !!p.glass }); if (p.steps) o.steps = p.steps; break; }
+        case 'delVtx': pushUndo(); o.poly.splice(i, 1); break;
+        case 'wallsFromRoom': {
+          pushUndo();
+          const same = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 0.02;
+          const exists = (p, q) => f.walls.some(w => (same(w.a, p) && same(w.b, q)) || (same(w.a, q) && same(w.b, p)));
+          let n = 0; o.poly.forEach((p, j) => { const q = o.poly[(j + 1) % o.poly.length]; if (!exists(p, q)) { f.walls.push({ id: uid('w'), a: p.slice(), b: q.slice(), ext: false }); n++; } });
+          toast(n ? `Am adăugat ${n} pereți pe conturul camerei.` : 'Conturul are deja pereți.'); break;
+        }
+        case 'toRail': { pushUndo(); f.walls = f.walls.filter(w => w.id !== o.id); f.openings = f.openings.filter(x => x.wall !== o.id); const r = { id: uid('l'), a: o.a, b: o.b }; f.railings.push(r); ED.sel = { t: 'rail', id: r.id }; break; }
+        case 'addRow': pushUndo(); o.panel ||= clone(panelOf(o)); o.panel.rows.push({ e: '', attr: '', label: '', unit: '', dec: '' }); break;
+        case 'delRow': pushUndo(); o.panel ||= clone(panelOf(o)); o.panel.rows.splice(i, 1); break;
+        case 'panelDefault': pushUndo(); delete o.panel; break;
+        case 'addCustom': pushUndo(); o.panel ||= clone(panelOf(o)); o.panel.actions ||= {}; (o.panel.actions.custom ||= []).push({ label: 'Buton', service: '', data: '' }); break;
+        case 'delCustom': pushUndo(); o.panel ||= clone(panelOf(o)); o.panel.actions.custom.splice(i, 1); break;
+        case 'addRule': pushUndo(); o.colors ||= { rules: [] }; o.colors.rules.push({ op: 'on', v: '', v2: '', e: '', color: '#ffb300', glow: false }); break;
+        case 'delRule': pushUndo(); o.colors.rules.splice(i, 1); break;
+        case 'ruleUp': if (i > 0) { pushUndo(); const r = o.colors.rules; [r[i - 1], r[i]] = [r[i], r[i - 1]]; } break;
+        case 'rulePreset': pushUndo(); o.colors ||= { rules: [] }; o.colors.rules.push({ op: 'unavail', v: '', v2: '', e: '', color: '#7a7f87', glow: false }, { op: 'lt', v: '18', v2: '', e: '', color: '#4f86f7', glow: false }, { op: 'between', v: '18', v2: '25', e: '', color: '#4fc3a1', glow: false }, { op: 'gt', v: '25', v2: '', e: '', color: '#eb5757', glow: true }); break;
+        case 'rulePresetOn': pushUndo(); o.colors ||= { rules: [] }; o.colors.rules.push({ op: 'on', v: '', v2: '', e: '', color: '#ffb300', glow: true }, { op: 'off', v: '', v2: '', e: '', color: '#9aa3ab', glow: false }); break;
+        case 'addFloor': { pushUndo(); const last = cfg.floors[cfg.floors.length - 1], nf = { id: uid('f'), name: 'Etaj nou', y: r2(last.y + last.height + 0.3), height: 2.6, roof: false, knee: 1, rooms: [], walls: [], openings: [], railings: [], items: [] }; cfg.floors.push(nf); ED.floorId = nf.id; ED.sel = null; fillFloorSel(); break; }
+        case 'delFloor': { if (!confirm(`Ștergi etajul „${f.name}” cu tot ce e pe el? (Se poate anula cu Ctrl+Z.)`)) return; pushUndo(); cfg.devices = cfg.devices.filter(d => d.floor !== f.id); cfg.floors = cfg.floors.filter(x => x !== f); ED.floorId = cfg.floors[0].id; ED.sel = null; fillFloorSel(); fitPlan(); break; }
+        case 'export': { const blob = new Blob([JSON.stringify(cfgForSave(), null, 1)], { type: 'application/json' }); const l = document.createElement('a'); l.href = URL.createObjectURL(blob); l.download = 'apartament-3d.json'; document.body.appendChild(l); l.click(); l.remove(); return; }
+        case 'import': { const fi = $('impFile'); fi.onchange = async () => { const c = await readCfgFile(fi.files[0]); fi.value = ''; if (!c) return; pushUndo(); cfg = c; ED.floorId = cfg.floors[0].id; ED.sel = null; fillFloorSel(); fitPlan(); changed(); toast('Import reușit. Apasă „Salvează” ca să-l păstrezi.'); }; fi.click(); return; }
+        case 'reset': if (!confirm('Încarci exemplul inclus în locul schiței curente? (Se poate anula cu Ctrl+Z.)')) return; pushUndo(); cfg = exampleCfg(); ED.floorId = cfg.floors[0].id; ED.sel = null; fillFloorSel(); fitPlan(); break;
+        case 'resetEmpty': if (!confirm('Începi o schiță goală? (Se poate anula cu Ctrl+Z.)')) return; pushUndo(); cfg = normalizeCfg(emptyCfg()); ED.floorId = cfg.floors[0].id; ED.sel = null; fillFloorSel(); fitPlan(); setTool('room'); break;
+        default: return;
+      }
+      changed();
+    });
+  });
+}
+function autofillDevice(d) {
+  const s = st(d.e); if (!s) return;
+  const dom = d.e.split('.')[0], dc = s.attributes.device_class;
+  if (!d.name || d.name === 'Senzor nou') d.name = s.attributes.friendly_name || d.e;
+  if (d.kind === 'generic' || !d.kind) {
+    d.kind = dom === 'light' ? 'light' : dom === 'climate' ? 'climate' : dom === 'media_player' ? 'tv' : (dom === 'switch' || dom === 'input_boolean') ? 'plug'
+      : dom === 'binary_sensor' && ['door', 'garage_door', 'opening'].includes(dc) ? 'door' : dom === 'sensor' && dc === 'temperature' ? 'temp' : 'generic';
+    if (dom === 'binary_sensor') d.icon = { motion: 'motion', occupancy: 'motion', presence: 'motion', window: 'window', moisture: 'water', lock: 'lock' }[dc] || d.icon;
+    if (dom === 'sensor') d.icon = { power: 'power', energy: 'power', humidity: 'water', moisture: 'water', temperature: 'temp' }[dc] || d.icon;
+    if (dom === 'fan') d.icon = 'fan';
+    if (d.kind === 'light') d.y = Math.min(2.4, ((floorById(d.floor) || {}).height || 2.6) - 0.15);
+  }
+}
+function fillFloorSel() { $('edFloor').innerHTML = cfg.floors.map(f => `<option value="${esc(f.id)}"${f.id === ED.floorId ? ' selected' : ''}>${esc(f.name)}</option>`).join(''); }
+function fillEntityList() {
+  $('entList').innerHTML = Object.values(S.allStates).sort((a, b) => a.entity_id.localeCompare(b.entity_id))
+    .map(s => `<option value="${esc(s.entity_id)}">${esc(s.attributes.friendly_name || '')}</option>`).join('');
+}
+function setTool(t) {
+  ED.tool = t; for (const b of $('toolSeg').children) b.setAttribute('aria-pressed', String(b.dataset.tool === t));
+  plan.style.cursor = t === 'select' ? 'default' : 'crosshair'; $('presetSel').style.display = t === 'item' ? '' : 'none';
+  if (t !== 'select' && ED.view !== '2d') setEdView('2d');
+}
+function setEdView(v) {
+  ED.view = v; for (const b of $('edView').children) b.setAttribute('aria-pressed', String(b.dataset.v === v));
+  document.body.classList.toggle('ed2d', ED.on && v === '2d');
+  if (v === '2d') select(null);
+  computeModes(); buildAll(); tween = 70;
+  if (v === '2d') { fitPlan(); drawPlan(); }
+}
+function setEdit(on) {
+  if (!on && isDirty() && !confirm('Ai modificări nesalvate. Ieși din editor fără să le salvezi?\n(Rămân vizibile până reîncarci pagina; le poți salva intrând din nou în editor.)')) return;
+  ED.on = on; document.body.classList.toggle('editing', on); $('tgEdit').setAttribute('aria-pressed', String(on));
+  $('tgEdit').textContent = on ? 'Ieși din editor' : 'Editează';
+  select(null);
+  if (on) {
+    if (S.conn && S.conn.mode === 'ha' && !S.isAdmin) toast('Poți edita, dar doar un administrator poate salva în Home Assistant.', true);
+    ED.floorId = settings.floor !== 'toate' && floorById(settings.floor) ? settings.floor : cfg.floors[0].id;
+    fillFloorSel(); fillEntityList(); setTool('select'); ED.sel = null; ED.undo = []; ED.redo = [];
+    setEdView('2d'); renderProps(); updateSaveState();
+  } else {
+    document.body.classList.remove('ed2d'); computeModes(); buildAll(); tween = 70;
+  }
+}
+
+/* ---------- salvare / încărcare în Home Assistant ----------
+   Cu integrarea Casa 3D instalată, schița stă în `.storage/casa_3d.config`
+   (comenzile casa_3d/config/get și /save). Fără ea (pagina copiată în /local/),
+   schița stă în panoul ascuns „apartament-3d-date”, ca înainte. O schiță
+   veche din panoul ascuns e preluată automat în integrare. */
+const CFG_WS = 'casa_3d/config';
+async function readLegacyCfg() {
+  try {
+    const r = await S.conn.send({ type: 'lovelace/config', url_path: CFG_DASH });
+    if (r && r.apartment3d && Array.isArray(r.apartment3d.floors)) return r.apartment3d;
+  } catch (e) { /* nu există */ }
+  return null;
+}
+async function loadCfg() {
+  let c = null;
+  S.store = 'lovelace';
+  if (S.conn.mode !== 'demo') {
+    try { c = await S.conn.send({ type: CFG_WS + '/get' }); S.store = 'integrare'; }
+    catch (e) { /* integrarea nu e instalată: rămâne panoul ascuns */ }
+  }
+  if (c && Array.isArray(c.floors)) { cfg = normalizeCfg(c); S.cfgSource = 'ha'; }
+  else if ((c = await readLegacyCfg())) {
+    cfg = normalizeCfg(c); S.cfgSource = S.conn.mode === 'demo' ? 'local' : 'ha';
+    if (S.store === 'integrare' && S.isAdmin) {
+      try { await S.conn.send({ type: CFG_WS + '/save', config: cfgForSave() }); toast('Am preluat schița salvată anterior în integrarea Casa 3D.'); }
+      catch (e) { /* rămâne citită din panoul ascuns */ }
+    }
+  }
+  ED.saved = JSON.stringify(cfgForSave());
+}
+async function saveCfg() {
+  if (!S.conn) return toast('Nu există conexiune.', true);
+  const c = cfgForSave();
+  $('btnSave').disabled = true;
+  try {
+    if (S.store === 'integrare') await S.conn.send({ type: CFG_WS + '/save', config: c });
+    else {
+      const data = { views: [], apartment3d: c };
+      const doSave = () => S.conn.send({ type: 'lovelace/config/save', url_path: CFG_DASH, config: data });
+      try { await doSave(); }
+      catch (e) {
+        await S.conn.send({ type: 'lovelace/dashboards/create', url_path: CFG_DASH, title: 'Casa 3D – date', icon: 'mdi:database', show_in_sidebar: false, require_admin: false, mode: 'storage' });
+        await doSave();
+      }
+    }
+    ED.saved = JSON.stringify(c); S.cfgSource = S.conn.mode === 'demo' ? 'local' : 'ha';
+    updateSaveState(); toast(S.conn.mode === 'demo' ? 'Salvat în acest browser (mod demo).' : 'Salvat în Home Assistant. Se vede pe toate dispozitivele.');
+  } catch (e) {
+    toast('Nu am putut salva: ' + (e.message || e) + '. Contul trebuie să fie administrator; poți folosi Export JSON.', true);
+  } finally { $('btnSave').disabled = false; }
+}
+async function readCfgFile(file) {
+  if (!file) return null;
+  try {
+    const j = JSON.parse(await file.text()); const c = j.apartment3d || j;
+    if (!Array.isArray(c.floors) || !c.floors.length || !Array.isArray(c.devices)) throw new Error('format');
+    return normalizeCfg(c);
+  } catch (e) { toast('Fișierul nu e o schiță Casa 3D validă.', true); return null; }
+}
+
+/* ---------- ecranul de bun venit (nicio schiță salvată încă) ---------- */
+function showWelcome() {
+  $('wNote').hidden = S.isAdmin;
+  $('welcome').hidden = false;
+  $('welcome').querySelector('.wopts button').focus();
+}
+function useCfg(c, msg) {
+  cfg = c; settings.floor = 'toate'; buildAll(); aimCamera();
+  $('welcome').hidden = true;
+  setEdit(true);
+  if (msg) toast(msg);
+}
+$('welcome').addEventListener('click', async e => {
+  const b = e.target.closest('[data-w]'); if (!b) return;
+  const w = b.dataset.w;
+  if (w === 'inchide') { $('welcome').hidden = true; return; }
+  if (w === 'gol') { useCfg(normalizeCfg(emptyCfg())); setTool('room'); toast('Trage pe plan ca să desenezi prima cameră.'); return; }
+  if (w === 'exemplu') {
+    const c = exampleCfg(), n = c.devices.length;
+    c.devices = c.devices.filter(d => S.states[d.e]);
+    useCfg(c, c.devices.length ? `Am păstrat ${c.devices.length} din ${n} senzori, cei care există la tine.` : 'Senzorii exemplului nu există la tine: îi adaugi cu unealta „Senzor”.');
+    return;
+  }
+  if (w === 'import') { const fi = $('wFile'); fi.onchange = async () => { const c = await readCfgFile(fi.files[0]); fi.value = ''; if (c) useCfg(c, 'Import reușit. Apasă „Salvează” ca să-l păstrezi.'); }; fi.click(); }
+});
+$('welcome').addEventListener('keydown', e => { if (e.key === 'Escape') $('welcome').hidden = true; });
+$('btnSave').onclick = saveCfg;
+$('btnRevert').onclick = () => { if (!isDirty()) return; if (!confirm('Renunți la toate modificările nesalvate?')) return; pushUndo(); cfg = normalizeCfg(JSON.parse(ED.saved)); ED.sel = null; if (!floorById(ED.floorId)) ED.floorId = cfg.floors[0].id; fillFloorSel(); buildAll(); changed(); };
+$('btnUndo').onclick = undo; $('btnRedo').onclick = redo;
+$('btnFit').onclick = () => { if (ED.view === '2d') { fitPlan(); drawPlan(); } else tween = 70; };
+$('toolSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTool(b.dataset.tool); });
+$('edView').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setEdView(b.dataset.v); });
+$('edFloor').addEventListener('change', e => { ED.floorId = e.target.value; ED.sel = null; renderProps(); if (ED.view === '2d') { fitPlan(); drawPlan(); } else { computeModes(); applyFloorMode(true); } });
+$('snapSel').addEventListener('change', e => { ED.snap = parseFloat(e.target.value); });
+$('presetSel').innerHTML = Object.entries(PRESETS).map(([k, p]) => `<option value="${k}">${p.n}</option>`).join('');
+$('presetSel').addEventListener('change', e => { ED.preset = e.target.value; });
+$('tgEdit').onclick = () => setEdit(!ED.on);
+window.addEventListener('beforeunload', e => { if (ED.on && isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+/* =====================================================================
+   BARA DE UNELTE (vizualizare)
+   ===================================================================== */
+$('floorSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; settings.floor = b.dataset.f; saveSettings(); applyFloorMode(); });
+const tg = (id, key, after) => {
+  const el = $(id); el.setAttribute('aria-pressed', String(!!settings[key]));
+  el.onclick = () => { settings[key] = !settings[key]; el.setAttribute('aria-pressed', String(settings[key])); saveSettings(); after && after(); refreshVisuals(); };
+};
+tg('tgHeat', 'heat');
+tg('tgWalls', 'walls', () => buildAll());
+tg('tgRoof', 'roof', () => applyFloorMode(false));
+tg('tgLabels', 'labels');
+
+/* =====================================================================
+   PORNIRE
+   ===================================================================== */
+function connUi() {
+  const m = S.conn && S.conn.mode, pill = $('connPill');
+  pill.className = 'pill ' + (m === 'ha' || m === 'token' ? 'ok' : m === 'demo' ? 'warn' : 'bad');
+  $('connText').textContent = m === 'ha' ? 'Live' : m === 'token' ? 'Live (token)' : m === 'demo' ? 'Demo' : 'Deconectat';
+}
+let pending = false;
+function scheduleRefresh() { if (pending) return; pending = true; setTimeout(() => { pending = false; refreshVisuals(); }, 60); }
+function watched() {
+  const ids = new Set();
+  for (const d of cfg.devices) {
+    if (d.e) ids.add(d.e);
+    for (const v of Object.values(d.extra || {})) if (typeof v === 'string' && v.includes('.')) ids.add(v);
+    for (const r of (d.panel && d.panel.rows) || []) if (r.e) ids.add(r.e);
+    for (const r of (d.colors && d.colors.rules) || []) if (r.e) ids.add(r.e);
+    if (d.label) for (const m of d.label.matchAll(/\{e:([^}:]+)/g)) ids.add(m[1]);
+  }
+  return ids;
+}
+function aimCamera() { const m0 = modeNow(); controls.target.set(...m0.target); camera.position.copy(controls.target).addScaledVector(VIEW_DIR, m0.dist); controls.update(); }
+async function start() {
+  buildAll(); aimCamera();
+  requestAnimationFrame(frame);
+  let conn = embeddedConn();
+  if (!conn) {
+    const tok = store.get('token', '');
+    if (tok) { try { conn = await new TokenConn(settings.url || location.origin, tok).open(); } catch (e) { toast(e.message, true); } }
+  }
+  if (!conn) conn = new DemoConn();
+  S.conn = conn; connUi();
+  if (conn.mode === 'ha') {
+    try { document.documentElement.dataset.theme = conn.root.hass.themes.darkMode ? 'dark' : 'light'; } catch (e) { /* implicit */ }
+    try { S.isAdmin = !!conn.root.hass.user.is_admin; } catch (e) { /* necunoscut */ }
+  }
+  await loadCfg();
+  try {
+    for (const s of await conn.send({ type: 'get_states' })) { S.allStates[s.entity_id] = s; S.states[s.entity_id] = s; }
+    await conn.subscribeEvents(ev => {
+      const d = ev.data; if (!d || !d.entity_id) return;
+      if (d.new_state) { S.states[d.entity_id] = d.new_state; S.allStates[d.entity_id] = d.new_state; } else { delete S.states[d.entity_id]; delete S.allStates[d.entity_id]; }
+      if (watched().has(d.entity_id)) scheduleRefresh();
+    }, 'state_changed');
+  } catch (e) { toast('Eroare la conectare: ' + (e.message || e), true); }
+  buildAll(); aimCamera();
+  if (S.cfgSource === 'implicit' && conn.mode !== 'demo') showWelcome();
+}
+window.__apt = { get cfg() { return cfg; }, S, ED, select, edSelect, setEdit, setEdView, setTool, settings, saveCfg, undo, redo, buildAll, fitPlan, drawPlan, hitTest, W2S, S2W, findSel };
+start();
+</script>
+</body>
+</html>

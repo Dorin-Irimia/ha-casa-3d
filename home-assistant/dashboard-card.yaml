@@ -1,0 +1,67 @@
+# Card pentru dashboard-ul Home Assistant
+# Dashboard -> Editează -> Adaugă card -> Manual -> lipește tot conținutul.
+# Dacă ID-urile entităților diferă la tine, verifică-le în
+# Setări -> Dispozitive -> Senzor NTC.
+type: vertical-stack
+cards:
+  - type: thermostat
+    entity: climate.senzor_ntc_termostat
+    name: Termostat NTC
+
+  - type: horizontal-stack
+    cards:
+      - type: gauge
+        entity: sensor.senzor_ntc_temperatura
+        name: Temperatură
+        min: 0
+        max: 100
+        needle: true
+        severity:
+          green: 0
+          yellow: 50
+          red: 70
+      - type: glance
+        show_name: true
+        columns: 1
+        entities:
+          - entity: sensor.senzor_ntc_temperatura_minima
+            name: Minim
+          - entity: sensor.senzor_ntc_temperatura_maxima
+            name: Maxim
+
+  - type: entities
+    title: Stare
+    entities:
+      - entity: binary_sensor.senzor_ntc_alarma_temperatura_maxima
+        name: Alarmă maximă
+      - entity: binary_sensor.senzor_ntc_alarma_temperatura_minima
+        name: Alarmă minimă
+      - entity: binary_sensor.senzor_ntc_defect_senzor
+        name: Senzor defect
+      - entity: button.senzor_ntc_resetare_minim_si_maxim
+        name: Resetare minim/maxim
+
+  - type: entities
+    title: Setări
+    state_color: true
+    entities:
+      - entity: number.senzor_ntc_prag_alarma_maxima
+        name: Prag alarmă maximă
+      - entity: number.senzor_ntc_prag_alarma_minima
+        name: Prag alarmă minimă
+      - entity: number.senzor_ntc_offset_calibrare
+        name: Offset calibrare
+      - entity: switch.senzor_ntc_oprire_termostat_la_alarma_maxima
+        name: Oprire termostat la alarmă
+      - type: divider
+      - entity: switch.senzor_ntc_display
+        name: Display pornit
+      - entity: number.senzor_ntc_luminozitate_display
+        name: Luminozitate display
+
+  - type: history-graph
+    title: Ultimele 24 de ore
+    hours_to_show: 24
+    entities:
+      - entity: sensor.senzor_ntc_temperatura
+        name: Temperatură

@@ -1,0 +1,46 @@
+# Notificare pe telefon (aplicația Home Assistant) la alarmă sau senzor defect.
+# Setări -> Automatizări -> Creează -> meniul ⋮ -> Editează în YAML -> lipește.
+# Înlocuiește notify.mobile_app_telefonul_meu cu serviciul telefonului tău
+# (Instrumente pentru dezvoltatori -> Acțiuni -> caută „notify.mobile_app_”).
+alias: "Senzor NTC - alarme"
+description: "Alarmă de temperatură, senzor defect sau dispozitiv offline: notificare pe telefon și mesaj pe display."
+mode: queued
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.senzor_ntc_alarma_temperatura_maxima
+    to: "on"
+    id: max
+  - trigger: state
+    entity_id: binary_sensor.senzor_ntc_alarma_temperatura_minima
+    to: "on"
+    id: min
+  - trigger: state
+    entity_id: binary_sensor.senzor_ntc_defect_senzor
+    to: "on"
+    id: defect
+  - trigger: state
+    entity_id: binary_sensor.senzor_ntc_stare
+    to: "unavailable"
+    for: "00:05:00"
+    id: offline
+actions:
+  - action: notify.mobile_app_telefonul_meu
+    data:
+      title: "Senzor NTC"
+      message: >-
+        {% set t = states('sensor.senzor_ntc_temperatura') %}
+        {% if trigger.id == 'max' %}🔥 Temperatură peste prag: {{ t }} °C
+        {% elif trigger.id == 'min' %}❄️ Temperatură sub prag: {{ t }} °C
+        {% elif trigger.id == 'defect' %}⚠️ Senzorul NTC pare întrerupt sau în scurtcircuit!
+        {% else %}📴 Dispozitivul nu mai răspunde de 5 minute.
+        {% endif %}
+  # Mesaj și pe display-ul OLED (doar pentru alarme, nu când dispozitivul e offline)
+  - if:
+      - condition: trigger
+        id: [max, min]
+    then:
+      - action: esphome.senzor_ntc_afiseaza_mesaj
+        data:
+          mesaj: >-
+            {{ 'Temperatură prea mare!' if trigger.id == 'max' else 'Temperatură prea mică!' }}
+          durata: 60

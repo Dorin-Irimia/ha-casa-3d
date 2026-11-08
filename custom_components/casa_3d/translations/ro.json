@@ -1,0 +1,42 @@
+{
+  "config": {
+    "abort": {
+      "single_instance_allowed": "Casa 3D este deja adăugată. Setările le schimbi din „Configurează”."
+    },
+    "step": {
+      "user": {
+        "title": "Casa 3D",
+        "description": "Adaugă în bara laterală un panou cu casa ta în 3D și senzorii din Home Assistant pe ea. Schița o desenezi în panou, cu butonul „Editează”.",
+        "data": {
+          "title": "Titlul panoului",
+          "icon": "Pictogramă",
+          "require_admin": "Panou vizibil doar pentru administratori",
+          "ntc_panel": "Adaugă și configuratorul display-ului NTC"
+        },
+        "data_description": {
+          "title": "Numele din bara laterală și din antetul paginii.",
+          "require_admin": "Schița o pot salva oricum doar administratorii. Bifează dacă nici n-ar trebui să o vadă ceilalți.",
+          "ntc_panel": "Doar dacă ai și senzorul NTC cu display OLED din același proiect (firmware ESPHome în folderul esphome/ al repo-ului)."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Casa 3D",
+        "data": {
+          "title": "Titlul panoului",
+          "icon": "Pictogramă",
+          "require_admin": "Panou vizibil doar pentru administratori",
+          "ntc_panel": "Adaugă și configuratorul display-ului NTC"
+        },
+        "data_description": {
+          "title": "Numele din bara laterală și din antetul paginii.",
+          "require_admin": "Schița o pot salva oricum doar administratorii. Bifează dacă nici n-ar trebui să o vadă ceilalți.",
+          "ntc_panel": "Doar dacă ai și senzorul NTC cu display OLED din același proiect (firmware ESPHome în folderul esphome/ al repo-ului)."
+        }
+      }
+    }
+  }
+}

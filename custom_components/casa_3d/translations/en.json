@@ -1,0 +1,42 @@
+{
+  "config": {
+    "abort": {
+      "single_instance_allowed": "Casa 3D is already set up. Change its settings with “Configure”."
+    },
+    "step": {
+      "user": {
+        "title": "Casa 3D",
+        "description": "Adds a sidebar panel with your home in 3D and your Home Assistant sensors placed in it. You draw the floor plan in the panel itself, with the “Editează” (Edit) button.",
+        "data": {
+          "title": "Panel title",
+          "icon": "Icon",
+          "require_admin": "Panel visible to administrators only",
+          "ntc_panel": "Also add the NTC display configurator"
+        },
+        "data_description": {
+          "title": "Name shown in the sidebar and in the page header.",
+          "require_admin": "Only administrators can save the floor plan anyway. Tick this if other users shouldn't see it either.",
+          "ntc_panel": "Only if you also built the NTC sensor with the OLED display from this project (ESPHome firmware in the repository's esphome/ folder)."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Casa 3D",
+        "data": {
+          "title": "Panel title",
+          "icon": "Icon",
+          "require_admin": "Panel visible to administrators only",
+          "ntc_panel": "Also add the NTC display configurator"
+        },
+        "data_description": {
+          "title": "Name shown in the sidebar and in the page header.",
+          "require_admin": "Only administrators can save the floor plan anyway. Tick this if other users shouldn't see it either.",
+          "ntc_panel": "Only if you also built the NTC sensor with the OLED display from this project (ESPHome firmware in the repository's esphome/ folder)."
+        }
+      }
+    }
+  }
+}

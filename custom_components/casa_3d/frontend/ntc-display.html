@@ -1,0 +1,1564 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Display NTC</title>
+<style>
+:root {
+  --bg: #f3f4f6; --card: #ffffff; --ink: #1b1e23; --muted: #5d6571; --line: #e2e5e9; --soft: #f6f8fa;
+  --accent: #0288d1; --accent-ink: #ffffff; --accent-soft: #e1f2fb;
+  --ok: #2e7d32; --ok-soft: #e5f3e6; --warn: #b45309; --warn-soft: #fdf0dc; --bad: #c62828; --bad-soft: #fbe5e5;
+  --changed: #f59e0b; --shadow: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.07);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216; --card: #181c21; --ink: #e7e9ec; --muted: #9aa3ae; --line: #2a3037; --soft: #1f242a;
+    --accent: #4fc3f7; --accent-ink: #04202c; --accent-soft: #12303d;
+    --ok: #81c784; --ok-soft: #18301b; --warn: #fbbf24; --warn-soft: #3a2b0b; --bad: #ef9a9a; --bad-soft: #3b1717;
+    --shadow: none; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1216; --card: #181c21; --ink: #e7e9ec; --muted: #9aa3ae; --line: #2a3037; --soft: #1f242a;
+  --accent: #4fc3f7; --accent-ink: #04202c; --accent-soft: #12303d;
+  --ok: #81c784; --ok-soft: #18301b; --warn: #fbbf24; --warn-soft: #3a2b0b; --bad: #ef9a9a; --bad-soft: #3b1717;
+  --shadow: none; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+button, input, select, textarea { font: inherit; color: inherit; }
+h1, h2, h3 { margin: 0; }
+
+.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+  max-width: 1240px; margin: 0 auto; padding: 18px 16px 6px; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand svg { flex: none; color: var(--accent); }
+.brand h1 { font-size: 20px; font-weight: 650; letter-spacing: -.01em; }
+.brand p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.top-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+  background: var(--soft); border: 1px solid var(--line); font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.pill.ok { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+.pill.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.pill.bad { color: var(--bad); background: var(--bad-soft); border-color: transparent; }
+.live-temp { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+
+.banner { max-width: 1240px; margin: 8px auto 0; padding: 0 16px; }
+.banner > div { background: var(--warn-soft); color: var(--ink); border-radius: 10px; padding: 10px 14px;
+  display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+
+.layout { max-width: 1240px; margin: 0 auto; padding: 12px 16px 40px; display: grid; gap: 16px;
+  grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 960px) {
+  .layout { grid-template-columns: minmax(380px, 500px) minmax(0, 1fr); align-items: start; }
+  .preview-col { position: sticky; top: 12px; }
+}
+.col { display: grid; gap: 16px; min-width: 0; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; box-shadow: var(--shadow); min-width: 0; }
+.card > h2 { font-size: 15px; font-weight: 650; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.card > .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 8px; }
+
+/* ---------- OLED ---------- */
+.oled-stage { display: grid; place-items: center; padding: 18px 8px; border-radius: 12px;
+  background: radial-gradient(120% 120% at 50% 0%, #2a3340 0%, #12161c 70%); }
+.oled-module { position: relative; background: #1d5fa8; border-radius: 10px; padding: 14px 12px 12px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 8px 24px rgba(0,0,0,.35); }
+.oled-module::before { content: ""; position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+  width: 44px; height: 5px; border-radius: 3px;
+  background: repeating-linear-gradient(90deg, #d8b45a 0 6px, transparent 6px 12px); opacity: .9; }
+.oled-glass { background: #05070a; border-radius: 3px; padding: 6px; line-height: 0; position: relative; }
+#oled { display: block; image-rendering: pixelated; transition: transform .25s ease; }
+.oled-overlay { position: absolute; inset: 0; display: none; place-items: center; color: #6b7685;
+  font-size: 12.5px; line-height: 1.3; text-align: center; padding: 8px; }
+.oled-overlay.show { display: grid; }
+
+.seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); }
+.seg button { border: 0; background: transparent; padding: 6px 10px; border-radius: 7px; cursor: pointer; color: var(--muted); font-size: 13px; }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: var(--shadow); font-weight: 600; }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.seg.full { display: flex; }
+.seg.full button { flex: 1 1 auto; }
+
+.preview-tabs { margin-top: 14px; }
+.preview-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.preview-opts label { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-top: 10px; cursor: pointer; }
+
+.applybar { margin-top: 14px; padding: 12px; border-radius: 12px; background: var(--soft); border: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.applybar.dirty { background: var(--warn-soft); border-color: transparent; }
+.applybar .msg { font-size: 13px; }
+.applybar .btns { display: flex; gap: 8px; }
+.nowrow { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
+  font-size: 13px; color: var(--muted); }
+.nowrow b { color: var(--ink); }
+
+/* ---------- formulare ---------- */
+.row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 6px 14px; align-items: center;
+  padding: 10px 0; border-top: 1px solid var(--line); position: relative; }
+.row:first-of-type { border-top: 0; }
+.row > .lbl { font-size: 13.5px; }
+.row > .lbl small { display: block; color: var(--muted); font-size: 12px; }
+.row.changed > .lbl::before { content: ""; position: absolute; left: -16px; top: 12px; bottom: 12px; width: 3px;
+  border-radius: 0 3px 3px 0; background: var(--changed); }
+.row .ctl { display: flex; align-items: center; gap: 8px; justify-content: flex-end; min-width: 0; flex-wrap: wrap; }
+@media (max-width: 520px) { .row { grid-template-columns: minmax(0, 1fr); } .row .ctl { justify-content: flex-start; } }
+
+input[type=text], input[type=number], input[type=password], input[type=url], select, textarea {
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+input[type=text], input[type=password], input[type=url], select, textarea { width: 100%; }
+input[type=number] { width: 92px; }
+textarea { resize: vertical; min-height: 64px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.rangewrap { display: flex; align-items: center; gap: 10px; width: 100%; }
+.rangewrap output { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+.unit { color: var(--muted); font-size: 13px; }
+
+.switch { position: relative; display: inline-block; width: 42px; height: 24px; flex: none; }
+.switch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.switch span { position: absolute; inset: 0; border-radius: 999px; background: var(--line); transition: background .15s; pointer-events: none; }
+.switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.switch input:checked + span { background: var(--accent); }
+.switch input:checked + span::after { transform: translateX(18px); }
+.switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.btn { border: 1px solid var(--line); background: var(--card); padding: 7px 12px; border-radius: 8px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.btn:hover { background: var(--soft); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.05); }
+.btn.danger { color: var(--bad); }
+.btn.sm { padding: 4px 9px; font-size: 13px; }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btngrid { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip { border: 1px dashed var(--line); background: transparent; border-radius: 999px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; color: var(--muted); }
+.chip:hover { color: var(--ink); border-style: solid; }
+
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 6px 0 10px; }
+@media (max-width: 520px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stat { background: var(--soft); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.stat .k { font-size: 12px; color: var(--muted); }
+.stat .v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+
+.target { display: inline-flex; align-items: center; gap: 4px; }
+.target output { min-width: 78px; text-align: center; font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+.hint { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
+.hint.warn { color: var(--warn); }
+details.card > summary { cursor: pointer; font-size: 15px; font-weight: 650; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+details.card > summary::-webkit-details-marker { display: none; }
+details.card > summary::after { content: "▾"; color: var(--muted); transition: transform .15s; }
+details.card[open] > summary::after { transform: rotate(180deg); }
+details.card[open] > summary { margin-bottom: 8px; }
+.ent-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ent-table th, .ent-table td { text-align: left; padding: 6px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
+.ent-table th { color: var(--muted); font-weight: 600; border-top: 0; }
+.ent-table input { width: 100%; padding: 4px 6px; font-size: 12.5px; font-family: ui-monospace, Menlo, monospace; }
+.ok-t { color: var(--ok); } .bad-t { color: var(--bad); }
+.tablewrap { overflow-x: auto; }
+.mono { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+  background: var(--ink); color: var(--card); padding: 10px 16px; border-radius: 10px; font-size: 13.5px; transition: all .2s; max-width: calc(100% - 32px); z-index: 10; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.bad { background: var(--bad); color: #fff; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <svg width="34" height="34" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15 13V5a3 3 0 0 0-6 0v8a5 5 0 1 0 6 0m-3-9a1 1 0 0 1 1 1v3h-2V5a1 1 0 0 1 1-1"/></svg>
+    <div>
+      <h1>Display senzor NTC</h1>
+      <p>Configurare și previzualizare OLED 128×64</p>
+    </div>
+  </div>
+  <div class="top-right">
+    <span class="pill" id="connPill"><span class="dot"></span><span id="connText">Se conectează…</span></span>
+    <span class="live-temp" id="liveTemp" aria-live="polite">--.- °C</span>
+  </div>
+</header>
+
+<div class="banner" id="demoBanner" hidden>
+  <div>
+    <span><b>Mod demo:</b> pagina nu e conectată la Home Assistant, datele sunt simulate.</span>
+    <button class="btn sm" type="button" id="btnGoConn">Conectează la Home Assistant</button>
+  </div>
+</div>
+
+<main class="layout">
+  <!-- ================= PREVIZUALIZARE ================= -->
+  <section class="col preview-col">
+    <div class="card">
+      <h2>Previzualizare</h2>
+      <p class="sub">Textul e desenat cu aceleași fonturi bitmap ca pe ESP32, deci arată identic pixel cu pixel.</p>
+      <div class="oled-stage" id="oledStage">
+        <div class="oled-module">
+          <div class="oled-glass">
+            <canvas id="oled" width="512" height="256" aria-label="Previzualizare display OLED"></canvas>
+            <div class="oled-overlay" id="oledOverlay"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-tabs seg full" role="group" aria-label="Pagina previzualizată" id="tabs">
+        <button type="button" data-page="main" aria-pressed="true">Principală</button>
+        <button type="button" data-page="details" aria-pressed="false">Detalii</button>
+        <button type="button" data-page="graph" aria-pressed="false">Grafic</button>
+        <button type="button" data-page="msg" aria-pressed="false">Mesaj</button>
+        <button type="button" data-page="error" aria-pressed="false">Eroare</button>
+        <button type="button" data-page="test" aria-pressed="false">Test</button>
+      </div>
+
+      <div class="preview-opts">
+        <label>Culoare OLED
+          <select id="optColor">
+            <option value="white">Alb</option>
+            <option value="blue">Albastru</option>
+            <option value="duo">Galben + albastru</option>
+          </select>
+        </label>
+        <label>Scenariu de test
+          <select id="optScenario">
+            <option value="live">Date reale</option>
+            <option value="amax">Alarmă maximă</option>
+            <option value="amin">Alarmă minimă</option>
+            <option value="releu">Releu pornit</option>
+            <option value="termoff">Termostat oprit</option>
+            <option value="noha">Fără Home Assistant</option>
+          </select>
+        </label>
+      </div>
+      <label class="check"><input type="checkbox" id="optFollow"> Urmărește pagina afișată pe display</label>
+
+      <div class="applybar" id="applyBar">
+        <span class="msg" id="dirtyText">Previzualizarea arată configurația de pe display.</span>
+        <div class="btns">
+          <button class="btn" type="button" id="btnRevert" disabled>Renunță</button>
+          <button class="btn primary" type="button" id="btnApply" disabled>Aplică pe display</button>
+        </div>
+      </div>
+      <div class="nowrow">
+        <span>Pe display acum: <b id="curPage">—</b></span>
+        <button class="btn sm" type="button" id="btnShowPage">Arată această pagină pe display</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SETĂRI ================= -->
+  <section class="col">
+    <div class="card" id="cardContent">
+      <h2>Ce se afișează</h2>
+      <p class="sub">Modificările apar întâi în previzualizare. Pe display ajung doar după ce apeși „Aplică pe display”.</p>
+      <div class="row" data-key="titlu">
+        <div class="lbl">Titlu<small>stânga sus, max. 12 caractere</small></div>
+        <div class="ctl"><input type="text" id="c_titlu" maxlength="12" autocomplete="off"></div>
+      </div>
+      <div class="row" data-key="colt">
+        <div class="lbl">Colț dreapta sus</div>
+        <div class="ctl"><select id="c_colt"></select></div>
+      </div>
+      <div class="row" data-key="format">
+        <div class="lbl">Format temperatură</div>
+        <div class="ctl"><div class="seg" id="c_format" role="group" aria-label="Format temperatură"></div></div>
+      </div>
+      <div class="row" data-key="jos">
+        <div class="lbl">Rând jos</div>
+        <div class="ctl"><select id="c_jos"></select></div>
+      </div>
+      <div class="row" data-key="txtjos">
+        <div class="lbl">Text personalizat<small>apare când rândul de jos e „Text personalizat”</small></div>
+        <div class="ctl"><input type="text" id="c_txtjos" maxlength="20" autocomplete="off"></div>
+      </div>
+      <div class="row" data-key="indicator">
+        <div class="lbl">Indicator dreapta jos</div>
+        <div class="ctl"><select id="c_indicator"></select></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Pagini</h2>
+      <p class="sub">Butonul BOOT de pe placă trece la pagina următoare din rotație.</p>
+      <div class="row" data-key="pagini">
+        <div class="lbl">Pagini în rotație</div>
+        <div class="ctl"><select id="c_pagini"></select></div>
+      </div>
+      <div class="row" data-key="rotire">
+        <div class="lbl">Rotire automată<small>0 = paginile nu se schimbă singure</small></div>
+        <div class="ctl"><div class="rangewrap"><input type="range" id="c_rotire" min="0" max="120" step="1"><output id="o_rotire"></output></div></div>
+      </div>
+      <div class="row" data-key="intors">
+        <div class="lbl">Display întors 180°<small>pentru montaj cu capul în jos</small></div>
+        <div class="ctl"><label class="switch"><input type="checkbox" id="c_intors"><span></span><b class="sr">Display întors</b></label></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Luminozitate și mod noapte</h2>
+      <div class="row" data-key="pornit">
+        <div class="lbl">Display pornit</div>
+        <div class="ctl"><label class="switch"><input type="checkbox" id="c_pornit"><span></span><b class="sr">Display pornit</b></label></div>
+      </div>
+      <div class="row" data-key="lum">
+        <div class="lbl">Luminozitate</div>
+        <div class="ctl"><div class="rangewrap"><input type="range" id="c_lum" min="5" max="100" step="5"><output id="o_lum"></output></div></div>
+      </div>
+      <div class="row" data-key="noapte">
+        <div class="lbl">Mod noapte<small>luminozitate redusă într-un interval orar</small></div>
+        <div class="ctl"><label class="switch"><input type="checkbox" id="c_noapte"><span></span><b class="sr">Mod noapte</b></label></div>
+      </div>
+      <div class="row" data-key="nstart">
+        <div class="lbl">Interval noapte</div>
+        <div class="ctl">
+          <select id="c_nstart" style="width:auto" aria-label="Noapte de la ora"></select>
+          <span class="unit">până la</span>
+          <select id="c_nstop" style="width:auto" aria-label="Noapte până la ora"></select>
+        </div>
+      </div>
+      <div class="row" data-key="nlum">
+        <div class="lbl">Luminozitate noaptea<small>0 = display stins</small></div>
+        <div class="ctl"><div class="rangewrap"><input type="range" id="c_nlum" min="0" max="100" step="5"><output id="o_nlum"></output></div></div>
+      </div>
+      <p class="hint" id="nightInfo"></p>
+    </div>
+
+    <div class="card">
+      <h2>Mesaj pe display</h2>
+      <p class="sub">Afișează un mesaj peste orice pagină. Apasă scurt butonul BOOT ca să-l închizi mai devreme.</p>
+      <textarea id="msgText" maxlength="90" placeholder="De exemplu: Atenție, suprafață fierbinte!"></textarea>
+      <div class="chips" id="msgChips">
+        <button class="chip" type="button">Atenție, suprafață fierbinte!</button>
+        <button class="chip" type="button">Nu atingeți</button>
+        <button class="chip" type="button">Pauză de întreținere</button>
+        <button class="chip" type="button">Gata!</button>
+      </div>
+      <p class="hint" id="msgFit"></p>
+      <div class="row">
+        <div class="lbl">Durată</div>
+        <div class="ctl"><input type="number" id="msgDur" min="1" max="3600" value="15"><span class="unit">secunde</span></div>
+      </div>
+      <div class="btngrid">
+        <button class="btn primary" type="button" id="btnMsgSend">Trimite pe display</button>
+        <button class="btn" type="button" id="btnMsgClear">Șterge mesajul</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Senzor și termostat</h2>
+      <p class="sub">Setările din acest card se aplică imediat, fără „Aplică pe display”.</p>
+      <div class="stats">
+        <div class="stat"><div class="k">Temperatură</div><div class="v" id="s_temp">—</div></div>
+        <div class="stat"><div class="k">Minim / maxim</div><div class="v" id="s_minmax">—</div></div>
+        <div class="stat"><div class="k">Rezistență NTC</div><div class="v" id="s_rez">—</div></div>
+        <div class="stat"><div class="k">Tensiune ADC</div><div class="v" id="s_tens">—</div></div>
+        <div class="stat"><div class="k">Semnal WiFi</div><div class="v" id="s_wifi">—</div></div>
+        <div class="stat"><div class="k">Funcționează de</div><div class="v" id="s_uptime">—</div></div>
+      </div>
+      <div class="status-chips" id="statusChips"></div>
+
+      <div class="row">
+        <div class="lbl">Offset calibrare</div>
+        <div class="ctl"><input type="number" id="i_offset" step="0.1" min="-10" max="10"><span class="unit">°C</span></div>
+      </div>
+      <div class="row">
+        <div class="lbl">Prag alarmă maximă</div>
+        <div class="ctl"><input type="number" id="i_pmax" step="0.5" min="-20" max="125"><span class="unit">°C</span></div>
+      </div>
+      <div class="row">
+        <div class="lbl">Prag alarmă minimă</div>
+        <div class="ctl"><input type="number" id="i_pmin" step="0.5" min="-20" max="125"><span class="unit">°C</span></div>
+      </div>
+      <div class="row">
+        <div class="lbl">Oprește termostatul la alarma maximă</div>
+        <div class="ctl"><label class="switch"><input type="checkbox" id="i_oprire"><span></span><b class="sr">Oprire la alarmă</b></label></div>
+      </div>
+      <div class="row">
+        <div class="lbl">Termostat</div>
+        <div class="ctl"><div class="seg" id="i_mode" role="group" aria-label="Mod termostat">
+          <button type="button" data-v="off" aria-pressed="false">Oprit</button>
+          <button type="button" data-v="heat" aria-pressed="false">Încălzire</button>
+        </div></div>
+      </div>
+      <div class="row">
+        <div class="lbl">Temperatură țintă</div>
+        <div class="ctl"><div class="target">
+          <button class="btn sm" type="button" id="i_tminus" aria-label="Scade ținta">−</button>
+          <output id="i_target">—</output>
+          <button class="btn sm" type="button" id="i_tplus" aria-label="Crește ținta">+</button>
+        </div></div>
+      </div>
+      <div class="row">
+        <div class="lbl">Preset</div>
+        <div class="ctl"><select id="i_preset" style="width:auto"></select></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Unelte</h2>
+      <div class="btngrid" style="margin:8px 0 4px">
+        <button class="btn" type="button" id="btnTest">Test pixeli (3 s)</button>
+        <button class="btn" type="button" id="btnResetMinMax">Resetează minim/maxim</button>
+        <button class="btn danger" type="button" id="btnRestart">Repornește ESP32</button>
+      </div>
+      <div class="row">
+        <div class="lbl">Configurații salvate<small>păstrate în acest browser</small></div>
+        <div class="ctl">
+          <select id="presetList" style="width:auto;min-width:140px"></select>
+          <button class="btn sm" type="button" id="btnPresetLoad">Încarcă</button>
+          <button class="btn sm danger" type="button" id="btnPresetDel">Șterge</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="lbl">Salvează ce vezi în previzualizare</div>
+        <div class="ctl">
+          <input type="text" id="presetName" placeholder="Nume configurație" maxlength="30" style="width:auto;flex:1">
+          <button class="btn sm" type="button" id="btnPresetSave">Salvează</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="lbl">Fișier</div>
+        <div class="ctl">
+          <button class="btn sm" type="button" id="btnExport">Export JSON</button>
+          <button class="btn sm" type="button" id="btnImport">Import JSON</button>
+          <button class="btn sm" type="button" id="btnDefaults">Valori implicite</button>
+          <input type="file" id="importFile" accept="application/json,.json" hidden>
+        </div>
+      </div>
+    </div>
+
+    <details class="card" id="connCard">
+      <summary>Conexiune și entități</summary>
+      <p class="hint" id="connInfo"></p>
+      <div class="row">
+        <div class="lbl">Numele dispozitivului în HA<small>„friendly_name” din YAML</small></div>
+        <div class="ctl"><input type="text" id="setDevice" autocomplete="off"></div>
+      </div>
+      <div class="row">
+        <div class="lbl">Durata graficului<small>la fel ca <span class="mono">grafic_durata</span> din YAML</small></div>
+        <div class="ctl"><input type="number" id="setGraph" min="5" max="1440" step="5"><span class="unit">minute</span></div>
+      </div>
+      <div id="tokenBox">
+        <div class="row">
+          <div class="lbl">Adresa Home Assistant</div>
+          <div class="ctl"><input type="url" id="setUrl" placeholder="http://homeassistant.local:8123"></div>
+        </div>
+        <div class="row">
+          <div class="lbl">Token de acces<small>Profil → Securitate → Tokenuri de acces de lungă durată</small></div>
+          <div class="ctl"><input type="password" id="setToken" autocomplete="off"></div>
+        </div>
+      </div>
+      <div class="btngrid" style="margin:10px 0 14px">
+        <button class="btn primary" type="button" id="btnReconnect">Salvează și reconectează</button>
+        <button class="btn" type="button" id="btnForget">Uită token-ul</button>
+      </div>
+      <div class="tablewrap">
+        <table class="ent-table">
+          <thead><tr><th>Entitate</th><th>ID în Home Assistant</th><th></th></tr></thead>
+          <tbody id="entRows"></tbody>
+        </table>
+      </div>
+      <p class="hint" id="svcInfo"></p>
+    </details>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+/*@@ENGINE-START@@*/
+/* =====================================================================
+   MOTOR OLED: reproduce desenarea din ESPHome (display + font + graph)
+   și lambda-ul display-ului din senzor-ntc.yaml. Nu atinge DOM-ul.
+   ===================================================================== */
+const FONT_DATA = /*@@FONTURI-START@@*/{"mare":{"b":26,"h":33,"g":[[45,11,2,16,7,3,"///4"],[46,8,2,22,4,4,"//4="],[48,16,1,6,14,20,"D8B/g/8fPnh5wP8D/A/wP8D/A/wP8D/A9wPeHnz4/8H+A/A="],[49,16,2,6,9,20,"AYfP///+PB4PB4PB4PB4PB4PB4PB4PA="],[50,16,1,6,14,20,"D8D/x/+ePvB7weAHgB4A+APAHgDwB4A+AfAPgHwD//////8="],[51,16,1,6,14,20,"D8D/x/++PvB4AeAHgD4P8D8A/wAeAHgA/wP8H/j5/+P/A/A="],[52,16,1,6,14,20,"APAHwB8A/AfwH8DvB7wc8PPDjx488PP//////wDwA8APADw="],[53,16,1,6,14,20,"P/j/4/+OADgB4AeAH/h/8f/jh4APADwA/wPeD3x4/+H/A/A="],[54,16,1,6,14,20,"AeAfgP4H4DwB4AeAHvh/8//vx/4P8D/A94PeD3x4/+H/AfA="],[55,16,1,6,14,20,"///////ADgB4AcAPADwB4AeAPADwB4AeAHgDwA8AeAHgDwA="],[56,16,1,6,14,20,"D8D/x/+fPnh54eeHnz4/8H+D/x4eeD/A/wP+H3h5/+P/A/A="],[57,16,1,6,14,20,"D4D/g/8fPvh7we8D/A/wPeH3/8/+HzgB4AeAPAPwf4H4B4A="],[67,18,1,6,16,20,"A/AP/D/+Pj58D3gP+A/wAPAA8ADwAPAA8AD4D3gPeA8+Pj/+H/wH8A=="],[70,15,2,6,13,20,"///////gDwB4A8AeAPAH/7/9/+8AeAPAHgDwB4A8AeAA"],[176,11,2,6,7,7,"OfsePH+OAA=="]]},"mediu":{"b":13,"h":16,"g":[[32,3,0,12,1,1,"AA=="],[33,4,1,3,2,10,"//zw"],[34,4,0,2,4,4,"3d0="],[35,8,0,3,8,10,"EhIWfzQk/ywsKA=="],[37,10,1,3,9,10,"4FklFo6A+FZbZYOA"],[38,9,0,3,9,10,"PB4Zh4ODyb3Ofx/A"],[39,2,0,2,2,4,"/w=="],[40,5,1,2,4,14,"JkzMzMzEYg=="],[41,5,0,2,4,14,"hGMzMzM2SA=="],[42,6,0,3,6,6,"EE/MeSA="],[43,8,0,4,7,8,"GDBn/+MGDA=="],[44,3,0,11,3,4,"bWA="],[45,6,1,7,4,2,"/w=="],[46,4,1,11,2,2,"8A=="],[47,5,0,3,5,11,"GMRjEYxGMA=="],[48,8,1,3,6,10,"e/zzzzzz/eA="],[49,8,1,3,4,10,"H9ERERE="],[50,8,0,3,8,10,"PH5mBgYMGDB/fw=="],[51,8,0,3,7,10,"PP2YMeOB4354"],[52,8,0,3,8,10,"Dg4eNiZmf/8GBg=="],[53,8,1,3,6,10,"//w+3DDz/eA="],[54,8,1,3,7,10,"OPMHz9mx5vzw"],[55,8,0,3,7,10,"//wYYMGGDDBg"],[56,8,1,3,6,10,"e/zz/ezz/eA="],[57,8,1,3,6,10,"e/zzz/fDecA="],[58,4,1,5,2,8,"8A8="],[59,4,0,5,3,10,"bAAbeA=="],[60,7,0,5,6,7,"BHeweHBA"],[61,8,1,6,6,5,"//A//A=="],[62,7,1,5,6,7,"g4eDe4gA"],[63,7,0,3,6,10,"OfzDHGMAMMA="],[64,13,1,3,11,13,"HwYRAWc5syZkzJmTU7sAMAPg"],[65,9,0,3,9,10,"DA4HhsNhmfz+YeDA"],[66,9,1,3,7,10,"/f8ePP+x4//4"],[67,9,1,3,8,10,"PH7Gw8DAwMP+PA=="],[68,9,1,3,8,10,"+PzGxsbGxsb8+A=="],[69,8,1,3,7,10,"//8GD9+wYP/8"],[70,8,1,3,6,10,"//ww//wwwwA="],[71,10,1,3,8,10,"PH7DwMDPw8N/Pg=="],[72,10,1,3,8,10,"w8PDw///w8PDww=="],[73,4,1,3,2,10,"///w"],[74,8,0,3,7,10,"BgwYMGDB4354"],[75,9,1,3,8,10,"x87c2PD4/MzGxw=="],[76,8,1,3,6,10,"wwwwwwww//A="],[77,12,1,3,10,10,"4fh+H8/z9L3vO8zzMA=="],[78,10,1,3,8,10,"w+Pj89vbz8/Hww=="],[79,10,1,3,8,10,"PH7Hw8PDw8d+PA=="],[80,9,1,3,8,10,"/P7Gxv78wMDAwA=="],[81,10,1,3,8,12,"PH7Hw8PDw8d+PgcC"],[82,9,1,3,8,10,"/P7Gxv78zMzGxg=="],[83,9,0,3,8,10,"Pn9jYDweA2N/Pg=="],[84,9,0,3,8,10,"//8YGBgYGBgYGA=="],[85,9,1,3,7,10,"x48ePHjx4/74"],[86,9,0,3,9,10,"wbHYzGNxsNg8HA4A"],[87,12,0,3,12,10,"xjZjZyb2b2bWOeOcOcOM"],[88,9,0,3,9,10,"YzGNh8HA4PhsY3GA"],[89,9,0,3,9,10,"wzGZhsPA4GAwGAwA"],[90,9,0,3,8,10,"//8GDBwYMHB//w=="],[91,4,1,1,3,14,"+222223A"],[93,4,0,1,3,14,"7bbbbbfA"],[95,6,0,13,6,2,"//A="],[97,8,0,5,7,8,"PNwZ9njbuw=="],[98,8,1,2,6,11,"www+/zzzz/+A"],[99,7,0,5,7,8,"PP2eDAzfng=="],[100,8,0,2,7,11,"BgwZ9+zx42b8+A=="],[101,8,0,5,7,8,"PP2aP+wfng=="],[102,5,0,2,5,11,"O9n2MYxjGA=="],[103,8,0,5,7,11,"Pv2ePGzfnwbc8A=="],[104,8,1,2,6,11,"www+/zzzzzzA"],[105,4,1,2,2,11,"8//8"],[106,4,-1,2,4,14,"MwMzMzMz/g=="],[107,7,1,2,7,11,"wYMGbZ48eNm7MA=="],[108,4,1,2,2,11,"///8"],[109,12,1,5,10,8,"+//8zzPM8zzPMw=="],[110,8,1,5,6,8,"+/zzzzzz"],[111,8,0,5,7,8,"PP2ePGzfng=="],[112,8,1,5,6,11,"+/zzzz/+wwwA"],[113,8,0,5,7,11,"Pv2ePGzfnwYMGA=="],[114,5,1,5,4,8,"/8zMzA=="],[115,7,0,5,7,8,"PNmDwcDbHg=="],[116,5,0,4,4,9,"b2ZmZzA="],[117,8,1,5,6,8,"zzzzzz/f"],[118,7,0,5,7,8,"xs2zZscOHA=="],[119,10,0,5,10,8,"zNM2ybp7nOM4zA=="],[120,7,0,5,7,8,"Ztjxw4+bcw=="],[121,7,0,5,7,11,"xs2zYscODDDhgA=="],[122,7,0,5,7,8,"fvhwww4f/w=="],[176,5,1,3,4,4,"a74="],[194,9,0,0,9,13,"DAsAAYHA8NhsMz+fzDwY"],[206,4,-1,0,6,13,"MaAMMMMMMMMMMA=="],[226,8,0,2,7,11,"GFgB5uDPs8bd2A=="],[238,4,-1,2,6,11,"MWAMMMMMMMMA"],[258,9,0,0,9,13,"Mg4AAYHA8NhsMz+fzDwY"],[259,8,0,2,7,11,"ZHAB5uDPs8bd2A=="],[350,9,0,3,8,13,"Pn9jYDweA2N/PggMDA=="],[351,7,0,5,7,11,"PNmDwcDbHhgQYA=="],[354,9,0,3,8,13,"//8YGBgYGBgYGBgMDA=="],[355,5,0,4,5,12,"Z5jGMY4xhmA="],[536,9,0,3,8,14,"Pn9jYDweA2N/PgAICBg="],[537,7,0,5,7,12,"PNmDwcDbHgAgQYA="],[538,9,0,3,8,14,"//8YGBgYGBgYGAAIGBA="],[539,5,0,4,4,13,"b2ZmZzAzIA=="],[937,9,1,3,8,10,"PH7Gx8fHxkbu7g=="],[8230,10,1,11,9,2,"222A"]]},"mic":{"b":10,"h":12,"g":[[32,2,0,9,1,1,"AA=="],[33,3,1,3,1,7,"+g=="],[34,3,1,2,2,2,"8A=="],[35,6,1,3,5,7,"Ur6vsoA="],[37,7,1,3,6,7,"wq0IPVHA"],[38,6,0,3,6,7,"cSUYVSfA"],[39,2,0,2,1,2,"wA=="],[40,3,1,2,2,10,"aqqQ"],[41,3,0,2,3,10,"iRJKUA=="],[42,4,0,3,4,4,"LWU="],[43,6,0,4,5,5,"IT5CAA=="],[44,2,0,9,2,3,"aA=="],[45,3,0,6,3,1,"4A=="],[46,3,1,9,1,1,"gA=="],[47,4,0,3,4,8,"EiJESA=="],[48,6,1,3,4,7,"6ZmZ4A=="],[49,6,1,3,3,7,"dJJI"],[50,6,0,3,5,7,"dEIiIeA="],[51,6,0,3,5,7,"ckJgxcA="],[52,6,0,3,5,7,"EYyviEA="],[53,6,1,3,4,7,"+OEZ4A=="],[54,6,1,3,4,7,"aOmZYA=="],[55,6,0,3,5,7,"+EQiEQA="],[56,6,1,3,4,7,"6ZaZ4A=="],[57,6,0,3,5,7,"cmKXhcA="],[58,2,1,5,1,5,"iA=="],[59,2,0,5,2,7,"QFg="],[60,5,0,5,4,4,"FmE="],[61,5,1,5,4,3,"8PA="],[62,5,1,5,4,4,"hmg="],[63,5,0,3,4,7,"eRIgIA=="],[64,9,1,3,8,9,"PEKaqamqvoB4"],[65,7,0,3,6,7,"EMKSeRhA"],[66,6,1,3,5,7,"9KXox8A="],[67,7,1,3,5,7,"dGEIRcA="],[68,7,1,3,5,7,"9GMYx8A="],[69,6,1,3,4,7,"+I+I8A=="],[70,6,1,3,4,7,"+I+IgA=="],[71,7,1,3,5,7,"dGF4xeA="],[72,7,1,3,5,7,"jGP4xiA="],[73,3,1,3,1,7,"/g=="],[74,6,0,3,5,7,"CEIQxcA="],[75,6,1,3,5,7,"nKnKSiA="],[76,5,1,3,4,7,"iIiI8A=="],[77,9,1,3,7,7,"h48dWrZkgA=="],[78,7,1,3,5,7,"jnNZziA="],[79,7,1,3,5,7,"dGMYxcA="],[80,6,1,3,5,7,"9GPoQgA="],[81,7,1,3,5,8,"dGMYxcE="],[82,6,1,3,5,7,"9GPpSiA="],[83,6,0,3,6,7,"eSQMCheA"],[84,6,0,3,6,7,"/IIIIIIA"],[85,6,1,3,5,7,"jGMYxcA="],[86,6,0,3,6,7,"hRSSKMEA"],[87,9,0,3,9,7,"iKSVSqVREIg="],[88,6,0,3,6,7,"RSMEMSRA"],[89,6,0,3,6,7,"hSSMIIIA"],[90,6,0,3,6,7,"+CEIIQ/A"],[91,3,1,2,2,10,"6qqw"],[93,3,0,2,2,10,"1VVw"],[95,5,0,10,5,1,"+A=="],[97,5,1,5,4,5,"6fnw"],[98,6,1,2,4,8,"iI6Zng=="],[99,5,0,5,5,5,"cmCXAA=="],[100,6,0,2,5,8,"CEL0xS8="],[101,5,0,5,5,5,"cn6HAA=="],[102,3,0,2,3,8,"KXSS"],[103,6,0,5,5,7,"emKXhcA="],[104,6,1,2,4,8,"iI6ZmQ=="],[105,2,1,3,1,7,"vg=="],[106,2,0,3,2,9,"RVWA"],[107,5,1,2,4,8,"iIrMqQ=="],[108,2,1,2,1,8,"/w=="],[109,9,1,5,7,5,"7yZMmSA="],[110,6,1,5,4,5,"6ZmQ"],[111,6,0,5,5,5,"cmKXAA=="],[112,6,1,5,4,7,"6ZnogA=="],[113,6,0,5,5,7,"emKXhCA="],[114,3,1,5,2,5,"6oA="],[115,5,0,5,5,5,"ck0XAA=="],[116,3,0,3,3,7,"S6SY"],[117,6,1,5,4,5,"mZnw"],[118,5,0,5,5,5,"ipTCAA=="],[119,8,0,5,7,5,"krWrIkA="],[120,5,0,5,5,5,"UoilAA=="],[121,5,0,5,5,7,"kpTCEwA="],[122,5,0,5,5,5,"8IiPgA=="],[176,4,1,3,2,3,"/A=="],[194,7,0,0,6,10,"EKAEMKSeRhA="],[206,3,0,0,3,10,"VCSSSA=="],[226,5,1,2,4,8,"Rg6fnw=="],[238,2,0,2,3,8,"VCSS"],[258,7,0,0,6,10,"KMAEMKSeRhA="],[259,5,1,2,4,8,"pg6fnw=="],[350,6,0,3,6,9,"eSQMCheEEA=="],[351,5,0,5,5,7,"ck0XGMA="],[354,6,0,3,6,9,"/IIIIIIEEA=="],[355,3,0,3,3,9,"S6SZIA=="],[536,6,0,3,6,10,"eSQMCheAEIA="],[537,5,0,5,5,8,"ck0XAIQ="],[538,6,0,3,6,10,"/IIIIIIAIIA="],[539,3,0,3,3,10,"S6SYKA=="],[937,7,1,3,5,7,"dGMYx2A="],[8230,7,1,9,5,1,"qA=="]]}}/*@@FONTURI-END@@*/;
+
+const DEF_OPTS = {
+  colt: ['Ora', 'Data', 'Semnal WiFi', 'Adresă IP', 'Nimic'],
+  format: ['23.4 °C', '23 °C', '74.1 °F', '74 °F'],
+  jos: ['Țintă termostat', 'Minim … maxim', 'Praguri alarmă', 'Rezistență', 'Text personalizat', 'Nimic'],
+  indicator: ['Stare releu', 'Semnal WiFi', 'Nimic'],
+  pagini: ['Doar principală', 'Principală + detalii', 'Principală + grafic', 'Toate'],
+  pagina: ['Principală', 'Detalii', 'Grafic'],
+};
+const DEF_CFG = {
+  titlu: 'NTC', colt: 'Ora', format: '23.4 °C', jos: 'Țintă termostat', txtjos: 'Salut!',
+  indicator: 'Stare releu', pagini: 'Toate', rotire: 0, intors: false, pornit: true, lum: 80,
+  noapte: false, nstart: 22, nstop: 7, nlum: 10,
+};
+const W = 128, H = 64;
+const TL = 0, TC = 8, TR = 16, CENTER = 9, BL = 4, BR = 20;   // TextAlign din ESPHome
+const TZ = 'Europe/Bucharest';
+
+function loadFont(d) {
+  const glyphs = new Map();
+  let first = null;
+  for (const [cp, adv, ox, oy, w, h, b64] of d.g) {
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const bits = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) bits[i] = (bytes[i >> 3] >> (7 - (i & 7))) & 1;
+    const g = { adv, ox, oy, w, h, bits };
+    glyphs.set(cp, g);
+    if (!first) first = g;
+  }
+  return { baseline: d.b, height: d.h, glyphs, first };
+}
+const FONTS = FONT_DATA ? { mic: loadFont(FONT_DATA.mic), mediu: loadFont(FONT_DATA.mediu), mare: loadFont(FONT_DATA.mare) } : null;
+
+class Oled {
+  constructor() { this.buf = new Uint8Array(W * H); }
+  clear() { this.buf.fill(0); }
+  fill(c) { this.buf.fill(c ? 1 : 0); }
+  px(x, y, c = 1) { if (x < 0 || y < 0 || x >= W || y >= H) return; this.buf[y * W + x] = c ? 1 : 0; }
+  hline(x, y, w, c = 1) { for (let i = 0; i < w; i++) this.px(x + i, y, c); }
+  vline(x, y, h, c = 1) { for (let i = 0; i < h; i++) this.px(x, y + i, c); }
+  line(x1, y1, x2, y2, c = 1) {
+    const dx = Math.abs(x2 - x1), sx = x1 < x2 ? 1 : -1, dy = -Math.abs(y2 - y1), sy = y1 < y2 ? 1 : -1;
+    let err = dx + dy;
+    for (;;) {
+      this.px(x1, y1, c);
+      if (x1 === x2 && y1 === y2) break;
+      const e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x1 += sx; }
+      if (e2 <= dx) { err += dx; y1 += sy; }
+    }
+  }
+  rect(x, y, w, h, c = 1) { this.hline(x, y, w, c); this.hline(x, y + h - 1, w, c); this.vline(x, y, h, c); this.vline(x + w - 1, y, h, c); }
+  fillRect(x, y, w, h, c = 1) { for (let j = 0; j < h; j++) this.hline(x, y + j, w, c); }
+  circle(cx, cy, r, c = 1) {
+    let dx = -r, dy = 0, err = 2 - 2 * r, e2;
+    do {
+      this.px(cx - dx, cy + dy, c); this.px(cx + dx, cy + dy, c);
+      this.px(cx + dx, cy - dy, c); this.px(cx - dx, cy - dy, c);
+      e2 = err;
+      if (e2 < dy) { err += ++dy * 2 + 1; if (-dx === dy && e2 <= dx) e2 = 0; }
+      if (e2 > dx) err += ++dx * 2 + 1;
+    } while (dx <= 0);
+  }
+  fillCircle(cx, cy, r, c = 1) {
+    let dx = -r, dy = 0, err = 2 - 2 * r, e2;
+    do {
+      this.px(cx - dx, cy + dy, c); this.px(cx + dx, cy + dy, c);
+      this.px(cx + dx, cy - dy, c); this.px(cx - dx, cy - dy, c);
+      const hw = 2 * (-dx) + 1;
+      this.hline(cx + dx, cy + dy, hw, c); this.hline(cx + dx, cy - dy, hw, c);
+      e2 = err;
+      if (e2 < dy) { err += ++dy * 2 + 1; if (-dx === dy && e2 <= dx) e2 = 0; }
+      if (e2 > dx) err += ++dx * 2 + 1;
+    } while (dx <= 0);
+  }
+  measure(f, s) {
+    let minx = 0, has = false, x = 0;
+    for (const ch of s) {
+      const g = f.glyphs.get(ch.codePointAt(0));
+      if (!g) { x += f.first.adv; continue; }
+      minx = has ? Math.min(minx, x + g.ox) : g.ox;
+      x += g.adv;
+      has = true;
+    }
+    return { w: x - minx, xo: minx };
+  }
+  bounds(x, y, f, al, s) {
+    const m = this.measure(f, String(s));
+    const xa = al & 0x18, ya = al & 0x07;
+    let x1 = x, y1 = y;
+    if (xa === 16) x1 = x - m.w - m.xo;
+    else if (xa === 8) x1 = x - Math.trunc((m.w + m.xo) / 2);
+    if (ya === 4) y1 = y - f.height;
+    else if (ya === 2) y1 = y - f.baseline;
+    else if (ya === 1) y1 = y - Math.trunc(f.height / 2);
+    return { x1, y1, w: m.w, h: f.height };
+  }
+  print(x, y, f, al, s, c = 1) {
+    s = String(s);
+    const { x1, y1 } = this.bounds(x, y, f, al, s);
+    let xa = x1;
+    for (const ch of s) {
+      const g = f.glyphs.get(ch.codePointAt(0));
+      if (!g) { this.rect(xa, y1, f.first.adv, f.height, c); xa += f.first.adv; continue; }
+      for (let j = 0; j < g.h; j++)
+        for (let i = 0; i < g.w; i++)
+          if (g.bits[j * g.w + i]) this.px(xa + g.ox + i, y1 + g.oy + j, c);
+      xa += g.adv;
+    }
+  }
+}
+
+/* printf("%.Nf") din C: NAN -> "nan" */
+function cf(v, d) {
+  if (v === null || v === undefined || Number.isNaN(v)) return 'nan';
+  if (!Number.isFinite(v)) return v > 0 ? 'inf' : '-inf';
+  return Number(v).toFixed(d);
+}
+function cfPlus(v, d) { const s = cf(v, d); return s[0] === '-' || s === 'nan' ? s : '+' + s; }
+
+let _tzFmt = null;
+function timeParts(date) {
+  try {
+    _tzFmt = _tzFmt || new Intl.DateTimeFormat('en-GB', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const p = {};
+    for (const x of _tzFmt.formatToParts(date)) p[x.type] = x.value;
+    return { Y: p.year, M: p.month, D: p.day, h: p.hour, m: p.minute };
+  } catch (e) {
+    const p2 = n => String(n).padStart(2, '0');
+    return { Y: String(date.getFullYear()), M: p2(date.getMonth() + 1), D: p2(date.getDate()), h: p2(date.getHours()), m: p2(date.getMinutes()) };
+  }
+}
+function optIndex(opts, key, value) {
+  const i = (opts[key] || DEF_OPTS[key]).indexOf(value);
+  return i < 0 ? 0 : i;   // ca active_index().value_or(0)
+}
+
+/* Mod noapte + luminozitate: identic cu scriptul aplica_luminozitate */
+function displayPower(cfg, page, now) {
+  let noapte = false;
+  if (cfg.noapte) {
+    const h = Number(timeParts(now).h);
+    const a = Math.trunc(cfg.nstart), b = Math.trunc(cfg.nstop);
+    if (a !== b) noapte = a < b ? (h >= a && h < b) : (h >= a || h < b);
+  }
+  let lum = noapte ? cfg.nlum : cfg.lum;
+  if (lum === null || Number.isNaN(lum)) lum = 80;
+  let on = !!cfg.pornit && lum > 0;
+  if (page === 'msg' || page === 'test') { on = true; if (lum < 30) lum = 100; }
+  return { on, lum, noapte };
+}
+
+/* Eșantioanele graficului (index 0 = cel mai nou), ca HistoryData din ESPHome */
+function graphSamples(hist, nowMs, durS) {
+  const out = new Array(128).fill(NaN);
+  const P = durS * 1000 / 128;
+  let j = hist.length - 1;
+  for (let i = 0; i < 128; i++) {
+    const t = nowMs - i * P;
+    while (j >= 0 && hist[j][0] > t) j--;
+    out[i] = j >= 0 ? hist[j][1] : NaN;
+  }
+  return out;
+}
+
+/* Graph::draw din ESPHome (border, x_grid, y_grid = 1, linie continuă) */
+function drawGraph(o, xo, yo, samples, durS) {
+  const gw = 128, gh = 49, thick = 1;
+  o.hline(xo, yo, gw); o.hline(xo, yo + gh - 1, gw); o.vline(xo, yo, gh); o.vline(xo + gw - 1, yo, gh);
+  let ymin = NaN, ymax = NaN;
+  for (const v of samples) {
+    if (Number.isNaN(v)) continue;
+    if (Number.isNaN(ymax) || v > ymax) ymax = v;
+    if (Number.isNaN(ymin) || v < ymin) ymin = v;
+  }
+  let yrange = ymax - ymin;
+  let ypd = 1.0;
+  if (yrange > 10 * ypd) while (yrange > 10 * ypd) ypd *= 2;
+  let yn = 0, ym = 1;
+  if (!Number.isNaN(ymin) && !Number.isNaN(ymax)) {
+    yn = Math.floor(ymin / ypd); ym = Math.ceil(ymax / ypd);
+    if (yn === ym) ym++;
+    ymin = yn * ypd; ymax = ym * ypd; yrange = ymax - ymin;
+  }
+  for (let y = yn; y <= ym; y++) {
+    const py = Math.round((gh - 1) * (1 - (y - yn) / (ym - yn)));
+    for (let x = 0; x < gw; x += 2) o.px(xo + x, yo + py);
+  }
+  let n = Math.trunc(durS / 600);
+  while (n > 20) n = Math.trunc(n / 2);
+  if (n > 0) for (let i = 0; i <= n; i++) for (let y = 0; y < gh; y += 2) o.px(xo + Math.trunc(i * (gw - 1) / n), yo + y);
+
+  const dp = (x, y) => { if (y >= yo && y < yo + gh) o.px(x, y); };
+  let hasPrev = false, prevB = false, prevY = 0;
+  for (let i = 0; i < gw; i++) {
+    const v = yrange !== 0 ? (samples[i] - ymin) / yrange : NaN;
+    if (Number.isNaN(v)) { hasPrev = false; continue; }
+    const x = gw - 1 - i + xo;
+    const y = Math.round((gh - 1) * (1 - v)) - Math.trunc(thick / 2) + yo;
+    if (!hasPrev || !prevB || Math.abs(y - prevY) <= thick) {
+      dp(x, y);
+    } else {
+      const mid = Math.trunc((y + prevY + thick) / 2);
+      if (y > prevY) { for (let t = prevY + thick; t <= mid; t++) dp(x + 1, t); for (let t = mid + 1; t < y + thick; t++) dp(x, t); }
+      else { for (let t = prevY - 1; t >= mid; t--) dp(x + 1, t); for (let t = mid - 1; t >= y; t--) dp(x, t); }
+    }
+    prevY = y; prevB = true; hasPrev = true;
+  }
+  return { min: ymin, max: ymax };
+}
+
+/* Împărțirea mesajului pe rânduri (identic cu lambda-ul) */
+function wrapMessage(o, text) {
+  const m = String(text).replace(/[\r\n]/g, ' ');
+  const lines = [];
+  let line = '', i = 0;
+  while (i <= m.length) {
+    let j = m.indexOf(' ', i);
+    if (j < 0) j = m.length;
+    const cuv = m.slice(i, j);
+    const proba = line === '' ? cuv : line + ' ' + cuv;
+    if (line !== '' && o.measure(FONTS.mediu, proba).w > 120) { lines.push(line); line = cuv; }
+    else line = proba;
+    i = j + 1;
+  }
+  if (line !== '') lines.push(line);
+  return lines;
+}
+
+/* Lambda-ul display-ului din senzor-ntc.yaml, linie cu linie */
+function renderDisplay(o, cfg, d, page, tms, msg, opts) {
+  const F = FONTS;
+  o.clear();
+  const clipeste = Math.floor(tms / 500) % 2 === 1;
+  const fmt = optIndex(opts, 'format', cfg.format);
+  const fahr = fmt >= 2, zec = fmt % 2 === 0 ? 1 : 0;
+  const u = fahr ? '°F' : '°C';
+  const conv = c => fahr ? c * 9 / 5 + 32 : c;
+
+  if (page === 'test') { o.fill(1); return; }
+  if (page === 'msg') {
+    o.rect(0, 0, 128, 64);
+    const linii = wrapMessage(o, msg).slice(0, 3);
+    const y0 = 32 - linii.length * 8;
+    linii.forEach((l, k) => o.print(64, y0 + k * 16, F.mediu, TC, l));
+    return;
+  }
+
+  const titlu = cfg.titlu || '';
+  o.print(0, 0, F.mic, TL, titlu);
+  const tb = o.bounds(0, 0, F.mic, TL, titlu);
+  if (d.ha) o.fillCircle(tb.w + 6, 6, 3); else o.circle(tb.w + 6, 6, 3);
+  const tp = d.time ? timeParts(d.time) : null;
+  switch (optIndex(opts, 'colt', cfg.colt)) {
+    case 0: if (tp) o.print(127, 0, F.mic, TR, `${tp.h}:${tp.m}`); break;
+    case 1: if (tp) o.print(127, 0, F.mic, TR, `${tp.D}.${tp.M}.${tp.Y}`); break;
+    case 2: if (!Number.isNaN(d.wifi)) o.print(127, 0, F.mic, TR, `${cf(d.wifi, 0)} dBm`); break;
+    case 3: o.print(127, 0, F.mic, TR, d.ip || ''); break;
+  }
+  o.line(0, 13, 127, 13);
+
+  if (d.defect || page === 'error') {
+    if (clipeste) o.print(64, 30, F.mediu, CENTER, 'EROARE SENZOR');
+    o.print(64, 48, F.mic, CENTER, `Verifică NTC (${cf(d.defect ? d.u : 3.14, 2)} V)`);
+    return;
+  }
+
+  if (page === 'details') {
+    const off = Number.isNaN(d.offset) ? 0 : d.offset;
+    o.print(0, 15, F.mic, TL, Number.isNaN(d.tmin) ? 'Min: --' : `Min: ${cf(conv(d.tmin), 1)}${u}`);
+    o.print(0, 27, F.mic, TL, Number.isNaN(d.tmax) ? 'Max: --' : `Max: ${cf(conv(d.tmax), 1)}${u}`);
+    o.print(0, 39, F.mic, TL, Number.isNaN(d.r) ? 'R: --' : `R: ${cf(d.r / 1000, 2)} kΩ`);
+    o.print(0, 51, F.mic, TL, `U: ${cf(d.u, 3)} V`);
+    o.print(127, 15, F.mic, TR, `Ofs ${cfPlus(fahr ? off * 1.8 : off, 1)}`);
+    o.print(127, 27, F.mic, TR, `${cf(d.wifi, 0)} dBm`);
+    o.print(127, 39, F.mic, TR, `Max ${cf(conv(d.pmax), 0)}°`);
+    o.print(127, 51, F.mic, TR, `Min ${cf(conv(d.pmin), 0)}°`);
+    return;
+  }
+
+  if (page === 'graph') {
+    const lim = drawGraph(o, 0, 15, d.samples, d.graphDur);
+    const eticheta = (x, y, al, s) => {
+      const b = o.bounds(x, y, F.mic, al, s);
+      o.fillRect(b.x1 - 1, b.y1, b.w + 2, b.h, 0);
+      o.print(x, y, F.mic, al, s);
+    };
+    if (!Number.isNaN(lim.max)) eticheta(2, 16, TL, cf(conv(lim.max), 0));
+    if (!Number.isNaN(lim.min)) eticheta(2, 62, BL, cf(conv(lim.min), 0));
+    if (!Number.isNaN(d.t)) eticheta(125, 16, TR, cf(conv(d.t), zec) + u);
+    return;
+  }
+
+  // ---------- pagina principală ----------
+  o.print(64, 33, F.mare, CENTER, Number.isNaN(d.t) ? '--.-' : cf(conv(d.t), zec) + u);
+  if (d.amax) {
+    if (clipeste) o.print(0, 63, F.mic, BL, '! ALARMĂ MAXIMĂ');
+  } else if (d.amin) {
+    if (clipeste) o.print(0, 63, F.mic, BL, '! ALARMĂ MINIMĂ');
+  } else {
+    let s = '';
+    switch (optIndex(opts, 'jos', cfg.jos)) {
+      case 0: s = d.mode === 'off' ? 'Termostat oprit' : `Țintă ${cf(conv(d.target), 1)}${u}`; break;
+      case 1: if (!Number.isNaN(d.tmin)) s = `${cf(conv(d.tmin), 1)} … ${cf(conv(d.tmax), 1)}${u}`; break;
+      case 2: s = `Alarme ${cf(conv(d.pmin), 0)} / ${cf(conv(d.pmax), 0)}${u}`; break;
+      case 3: if (!Number.isNaN(d.r)) s = `R ${cf(d.r / 1000, 2)} kΩ`; break;
+      case 4: s = cfg.txtjos || ''; break;
+    }
+    o.print(0, 63, F.mic, BL, s);
+  }
+  switch (optIndex(opts, 'indicator', cfg.indicator)) {
+    case 0:
+      if (d.releu) { o.fillRect(98, 52, 30, 12); o.print(113, 58, F.mic, CENTER, 'ON', 0); }
+      else { o.rect(98, 52, 30, 12); o.print(113, 58, F.mic, CENTER, 'OFF'); }
+      break;
+    case 1: if (!Number.isNaN(d.wifi)) o.print(127, 63, F.mic, BR, `${cf(d.wifi, 0)} dBm`); break;
+  }
+}
+/*@@ENGINE-END@@*/
+
+/* =====================================================================
+   ENTITĂȚI: cheie -> [domeniu, numele din ESPHome]
+   ===================================================================== */
+const ENT = {
+  temp: ['sensor', 'Temperatură'], tmin: ['sensor', 'Temperatură minimă'], tmax: ['sensor', 'Temperatură maximă'],
+  rez: ['sensor', 'Rezistență NTC'], tens: ['sensor', 'Tensiune ADC'], wifi: ['sensor', 'Semnal WiFi'],
+  uptime: ['sensor', 'Timp funcționare'], ip: ['sensor', 'Adresă IP'],
+  stare: ['binary_sensor', 'Stare'], defect: ['binary_sensor', 'Defect senzor'],
+  amax: ['binary_sensor', 'Alarmă temperatură maximă'], amin: ['binary_sensor', 'Alarmă temperatură minimă'],
+  noapteActiv: ['binary_sensor', 'Display mod noapte activ'],
+  termostat: ['climate', 'Termostat'],
+  offset: ['number', 'Offset calibrare'], pmax: ['number', 'Prag alarmă maximă'], pmin: ['number', 'Prag alarmă minimă'],
+  oprire: ['switch', 'Oprire termostat la alarmă maximă'],
+  reset: ['button', 'Resetare minim și maxim'], restart: ['button', 'Repornire'],
+  titlu: ['text', 'Display titlu'], colt: ['select', 'Display colț dreapta'], format: ['select', 'Display format temperatură'],
+  jos: ['select', 'Display rând jos'], txtjos: ['text', 'Display text personalizat'], indicator: ['select', 'Display indicator'],
+  pagini: ['select', 'Display pagini în rotație'], pagina: ['select', 'Display pagina curentă'],
+  rotire: ['number', 'Display rotire automată'], intors: ['switch', 'Display întors'], pornit: ['switch', 'Display'],
+  lum: ['number', 'Luminozitate display'], noapte: ['switch', 'Display mod noapte'],
+  nstart: ['number', 'Display noapte de la ora'], nstop: ['number', 'Display noapte până la ora'],
+  nlum: ['number', 'Display luminozitate noapte'],
+};
+const DRAFT_KEYS = Object.keys(DEF_CFG);
+const PAGE_KEYS = ['main', 'details', 'graph'];
+
+const slug = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+const $ = id => document.getElementById(id);
+
+/* ---------- setări locale (localStorage poate lipsi) ---------- */
+const store = {
+  get(k, def) { try { const v = localStorage.getItem('ntcDisplay.' + k); return v === null ? def : JSON.parse(v); } catch (e) { return def; } },
+  set(k, v) { try { localStorage.setItem('ntcDisplay.' + k, JSON.stringify(v)); } catch (e) { /* ignorat */ } },
+  del(k) { try { localStorage.removeItem('ntcDisplay.' + k); } catch (e) { /* ignorat */ } },
+};
+const settings = Object.assign({ device: 'Senzor NTC', graphMin: 60, map: {}, color: 'blue', scenario: 'live', follow: false, url: '' }, store.get('settings', {}));
+const saveSettings = () => store.set('settings', settings);
+
+/* =====================================================================
+   CONEXIUNI: Home Assistant (iframe), token, demo
+   ===================================================================== */
+function embeddedConn() {
+  for (const w of [window.parent, window.top]) {
+    try {
+      if (!w || w === window) continue;
+      const root = w.document.querySelector('home-assistant');
+      if (root && root.hass && root.hass.connection) {
+        return {
+          mode: 'ha', root,
+          send: msg => root.hass.connection.sendMessagePromise(msg),
+          subscribeEvents: (cb, type) => root.hass.connection.subscribeEvents(cb, type),
+        };
+      }
+    } catch (e) { /* alt origin */ }
+  }
+  return null;
+}
+
+class TokenConn {
+  constructor(url, token) { this.url = url.replace(/\/+$/, ''); this.token = token; this.mode = 'token'; this.n = 0; this.pending = new Map(); this.subs = new Map(); }
+  open() {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(this.url.replace(/^http/, 'ws') + '/api/websocket');
+      this.ws = ws;
+      ws.onmessage = ev => {
+        const m = JSON.parse(ev.data);
+        if (m.type === 'auth_required') ws.send(JSON.stringify({ type: 'auth', access_token: this.token }));
+        else if (m.type === 'auth_ok') resolve(this);
+        else if (m.type === 'auth_invalid') reject(new Error('Token invalid'));
+        else if (m.type === 'result') {
+          const p = this.pending.get(m.id); this.pending.delete(m.id);
+          if (p) m.success ? p.resolve(m.result) : p.reject(new Error(m.error ? m.error.message : 'Eroare'));
+        } else if (m.type === 'event') { const cb = this.subs.get(m.id); if (cb) cb(m.event); }
+      };
+      ws.onerror = () => reject(new Error('Nu mă pot conecta la ' + this.url));
+      ws.onclose = () => { if (this.onclose) this.onclose(); };
+    });
+  }
+  send(msg) {
+    const id = ++this.n;
+    return new Promise((resolve, reject) => { this.pending.set(id, { resolve, reject }); this.ws.send(JSON.stringify(Object.assign({ id }, msg))); });
+  }
+  async subscribeEvents(cb, type) {
+    const id = ++this.n;
+    this.subs.set(id, cb);
+    await new Promise((resolve, reject) => { this.pending.set(id, { resolve, reject }); this.ws.send(JSON.stringify({ id, type: 'subscribe_events', event_type: type })); });
+    return () => this.subs.delete(id);
+  }
+}
+
+class DemoConn {
+  constructor(dev) {
+    this.mode = 'demo'; this.cbs = [];
+    this.states = {};
+    const opts = (k) => ({ options: DEF_OPTS[k] });
+    const init = {
+      temp: [23.4, { unit_of_measurement: '°C' }], tmin: [21.2], tmax: [26.8], rez: [9420], tens: [1.597], wifi: [-58],
+      uptime: [7380], ip: ['192.168.1.57'], stare: ['on'], defect: ['off'], amax: ['off'], amin: ['off'], noapteActiv: ['off'],
+      termostat: ['heat', { current_temperature: 23.4, temperature: 40, hvac_action: 'heating', preset_mode: 'Normal', preset_modes: ['Normal', 'Eco'], min_temp: 0, max_temp: 100, target_temp_step: 0.5, hvac_modes: ['off', 'heat'] }],
+      offset: [0], pmax: [60], pmin: [5], oprire: ['on'], reset: ['unknown'], restart: ['unknown'],
+      titlu: ['NTC'], colt: ['Ora', opts('colt')], format: ['23.4 °C', opts('format')], jos: ['Țintă termostat', opts('jos')],
+      txtjos: ['Salut!'], indicator: ['Stare releu', opts('indicator')], pagini: ['Toate', opts('pagini')],
+      pagina: ['Principală', opts('pagina')], rotire: [0], intors: ['off'], pornit: ['on'], lum: [80], noapte: ['off'],
+      nstart: [22], nstop: [7], nlum: [10],
+    };
+    for (const [k, [v, a]] of Object.entries(init)) {
+      const [dom, name] = ENT[k];
+      const id = `${dom}.${slug(dev)}_${slug(name)}`;
+      this.states[id] = { entity_id: id, state: String(v), attributes: Object.assign({ friendly_name: `${dev} ${name}` }, a || {}) };
+    }
+    this.idOf = k => `${ENT[k][0]}.${slug(dev)}_${slug(ENT[k][1])}`;
+    this.hist = [];
+    const now = Date.now();
+    for (let i = 360; i >= 0; i--) this.hist.push([now - i * 10000, 23.4 + Math.sin(i / 40) * 1.6 + Math.sin(i / 7) * 0.25]);
+    setInterval(() => this.tick(), 2000);
+  }
+  st(k) { return this.states[this.idOf(k)]; }
+  put(id, state, attrs) {
+    const old = this.states[id];
+    const ns = { entity_id: id, state: String(state), attributes: Object.assign({}, old ? old.attributes : {}, attrs || {}) };
+    this.states[id] = ns;
+    for (const cb of this.cbs) cb({ data: { entity_id: id, old_state: old, new_state: ns } });
+  }
+  tick() {
+    const th = this.st('termostat');
+    let t = parseFloat(this.st('temp').state);
+    const target = th.attributes.temperature;
+    let action = th.attributes.hvac_action;
+    if (th.state === 'heat') {
+      if (t <= target - 0.5) action = 'heating';
+      else if (t >= target + 0.5) action = 'idle';
+    } else action = 'off';
+    t += (action === 'heating' ? 0.35 : -0.12) + (Math.random() - 0.5) * 0.08;
+    t = Math.max(18, t);
+    const r = 10000 * Math.exp(3950 * (1 / (t + 273.15) - 1 / 298.15));
+    this.put(this.idOf('temp'), t.toFixed(1));
+    this.put(this.idOf('rez'), r.toFixed(0));
+    this.put(this.idOf('tens'), (3.3 * r / (r + 10000)).toFixed(3));
+    this.put(this.idOf('termostat'), th.state, { current_temperature: +t.toFixed(1), hvac_action: action });
+    this.put(this.idOf('tmax'), Math.max(parseFloat(this.st('tmax').state), t).toFixed(1));
+    this.put(this.idOf('tmin'), Math.min(parseFloat(this.st('tmin').state), t).toFixed(1));
+    const pmax = parseFloat(this.st('pmax').state), pmin = parseFloat(this.st('pmin').state);
+    const amax = this.st('amax').state === 'on', amin = this.st('amin').state === 'on';
+    if (!amax && t >= pmax) { this.put(this.idOf('amax'), 'on'); if (this.st('oprire').state === 'on') this.put(this.idOf('termostat'), 'off', { hvac_action: 'off' }); }
+    if (amax && t <= pmax - 1) this.put(this.idOf('amax'), 'off');
+    if (!amin && t <= pmin) this.put(this.idOf('amin'), 'on');
+    if (amin && t >= pmin + 1) this.put(this.idOf('amin'), 'off');
+    this.put(this.idOf('uptime'), String(parseInt(this.st('uptime').state, 10) + 2));
+    this.hist.push([Date.now(), t]);
+  }
+  async send(msg) {
+    if (msg.type === 'get_states') return Object.values(this.states);
+    if (msg.type === 'get_services') {
+      const p = slug(settings.device);
+      return { esphome: { [`${p}_afiseaza_mesaj`]: {}, [`${p}_sterge_mesaj`]: {}, [`${p}_test_display`]: {} } };
+    }
+    if (msg.type === 'history/history_during_period') {
+      const id = msg.entity_ids[0];
+      return { [id]: this.hist.map(([t, v]) => ({ s: v.toFixed(1), lu: t / 1000 })) };
+    }
+    if (msg.type === 'call_service') {
+      const id = msg.target && msg.target.entity_id;
+      const d = msg.service_data || {};
+      const sv = `${msg.domain}.${msg.service}`;
+      if (sv === 'text.set_value') this.put(id, d.value);
+      else if (sv === 'select.select_option') this.put(id, d.option);
+      else if (sv === 'number.set_value') this.put(id, d.value);
+      else if (sv === 'switch.turn_on') this.put(id, 'on');
+      else if (sv === 'switch.turn_off') this.put(id, 'off');
+      else if (sv === 'climate.set_hvac_mode') this.put(id, d.hvac_mode, { hvac_action: d.hvac_mode === 'off' ? 'off' : 'idle' });
+      else if (sv === 'climate.set_temperature') this.put(id, this.states[id].state, { temperature: d.temperature });
+      else if (sv === 'climate.set_preset_mode') this.put(id, this.states[id].state, { preset_mode: d.preset_mode, temperature: d.preset_mode === 'Eco' ? 30 : 40 });
+      else if (sv === 'button.press' && id === this.idOf('reset')) {
+        const t = this.st('temp').state; this.put(this.idOf('tmin'), t); this.put(this.idOf('tmax'), t);
+      }
+      return null;
+    }
+    throw new Error('Necunoscut în demo: ' + msg.type);
+  }
+  async subscribeEvents(cb) { this.cbs.push(cb); return () => { this.cbs = this.cbs.filter(c => c !== cb); }; }
+}
+
+/* =====================================================================
+   STARE APLICAȚIE
+   ===================================================================== */
+const S = {
+  conn: null, states: {}, ids: {}, services: {}, hist: [],
+  applied: Object.assign({}, DEF_CFG), draft: Object.assign({}, DEF_CFG), touched: new Set(),
+  page: 'main', connError: '',
+};
+
+function resolveIds() {
+  const byKey = new Map();
+  for (const s of Object.values(S.states)) {
+    const fn = s.attributes && s.attributes.friendly_name;
+    if (fn) byKey.set(s.entity_id.split('.')[0] + '|' + slug(fn), s.entity_id);
+  }
+  const dev = settings.device;
+  for (const [k, [dom, name]] of Object.entries(ENT)) {
+    const manual = settings.map[k];
+    if (manual) { S.ids[k] = manual; continue; }
+    const guess = `${dom}.${slug(dev)}_${slug(name)}`;
+    S.ids[k] = byKey.get(dom + '|' + slug(dev + ' ' + name)) || guess;
+  }
+  S.idSet = new Set(Object.values(S.ids));
+}
+
+const st = k => S.states[S.ids[k]];
+const has = k => { const s = st(k); return !!s && s.state !== 'unavailable'; };
+const num = k => { const s = st(k); const v = s ? parseFloat(s.state) : NaN; return Number.isFinite(v) ? v : NaN; };
+const str = k => { const s = st(k); return s && s.state !== 'unknown' && s.state !== 'unavailable' ? s.state : null; };
+const isOn = k => { const s = st(k); return !!s && s.state === 'on'; };
+const optsOf = k => { const s = st(k); const o = s && s.attributes && s.attributes.options; return Array.isArray(o) && o.length ? o : DEF_OPTS[k]; };
+const OPTS = () => ({ colt: optsOf('colt'), format: optsOf('format'), jos: optsOf('jos'), indicator: optsOf('indicator'), pagini: optsOf('pagini'), pagina: optsOf('pagina') });
+
+function readApplied() {
+  const a = {};
+  for (const k of DRAFT_KEYS) {
+    const [dom] = ENT[k];
+    if (!has(k)) { a[k] = DEF_CFG[k]; continue; }
+    if (dom === 'number') { const v = num(k); a[k] = Number.isNaN(v) ? DEF_CFG[k] : v; }
+    else if (dom === 'switch') a[k] = isOn(k);
+    else { const v = str(k); a[k] = v === null ? DEF_CFG[k] : v; }
+  }
+  return a;
+}
+const same = (a, b) => (typeof a === 'number' || typeof b === 'number') ? Math.abs(Number(a) - Number(b)) < 1e-6 : a === b;
+const changedKeys = () => DRAFT_KEYS.filter(k => !same(S.draft[k], S.applied[k]));
+
+function syncFromStates() {
+  S.applied = readApplied();
+  for (const k of DRAFT_KEYS) {
+    if (!S.touched.has(k) || same(S.draft[k], S.applied[k])) { S.draft[k] = S.applied[k]; S.touched.delete(k); }
+  }
+}
+
+function liveData() {
+  const th = st('termostat');
+  const a = th ? th.attributes : {};
+  const d = {
+    t: num('temp'), tmin: num('tmin'), tmax: num('tmax'), r: num('rez'), u: num('tens'), wifi: num('wifi'),
+    ip: str('ip') || '', ha: st('stare') ? isOn('stare') : true, defect: isOn('defect'),
+    amax: isOn('amax'), amin: isOn('amin'), releu: a.hvac_action === 'heating',
+    mode: th ? th.state : 'off', target: Number.isFinite(a.temperature) ? a.temperature : NaN,
+    offset: num('offset'), pmax: num('pmax'), pmin: num('pmin'), time: new Date(),
+    graphDur: settings.graphMin * 60,
+  };
+  switch (settings.scenario) {
+    case 'amax': d.amax = true; d.amin = false; d.defect = false; break;
+    case 'amin': d.amin = true; d.amax = false; d.defect = false; break;
+    case 'releu': d.releu = true; break;
+    case 'termoff': d.mode = 'off'; d.releu = false; break;
+    case 'noha': d.ha = false; break;
+  }
+  d.samples = graphSamples(S.hist, Date.now(), d.graphDur);
+  return d;
+}
+
+/* =====================================================================
+   RANDARE PREVIZUALIZARE
+   ===================================================================== */
+const oled = new Oled();
+const canvas = $('oled');
+const ctx = canvas.getContext('2d');
+let scale = 4;
+
+const COLORS = { white: ['#eef6ff', '#eef6ff'], blue: ['#5fd0ff', '#5fd0ff'], duo: ['#ffd54a', '#5fd0ff'] };
+
+function fitCanvas() {
+  const stage = $('oledStage');
+  const avail = stage.clientWidth - 16 - 24 - 12;   // padding + modul + sticlă
+  scale = Math.max(2, Math.min(5, Math.floor(avail / 128)));
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = 128 * scale * dpr; canvas.height = 64 * scale * dpr;
+  canvas.style.width = 128 * scale + 'px'; canvas.style.height = 64 * scale + 'px';
+}
+
+function paint() {
+  if (!FONTS) return;
+  const msg = $('msgText').value.trim() || 'Mesaj de test din Home Assistant';
+  const now = Date.now();
+  renderDisplay(oled, S.draft, liveData(), S.page, now, msg, OPTS());
+  const pw = displayPower(S.draft, S.page, new Date());
+  const dpr = window.devicePixelRatio || 1;
+  const s = scale * dpr;
+  const gap = s >= 4 ? Math.max(1, Math.round(s * 0.14)) : 0;
+  ctx.fillStyle = '#05070a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#0b0f14';
+  if (s >= 4) for (let y = 0; y < 64; y++) for (let x = 0; x < 128; x++) ctx.fillRect(x * s, y * s, s - gap, s - gap);
+  const ov = $('oledOverlay');
+  if (!pw.on) {
+    ov.textContent = pw.noapte ? 'Display stins (mod noapte)' : 'Display stins';
+    ov.classList.add('show');
+  } else {
+    ov.classList.remove('show');
+    const [top, rest] = COLORS[settings.color] || COLORS.blue;
+    ctx.globalAlpha = 0.3 + 0.7 * (pw.lum / 100);
+    for (let y = 0; y < 64; y++) {
+      ctx.fillStyle = y < 16 ? top : rest;
+      for (let x = 0; x < 128; x++) if (oled.buf[y * 128 + x]) ctx.fillRect(x * s, y * s, s - gap, s - gap);
+    }
+    ctx.globalAlpha = 1;
+  }
+  canvas.style.transform = S.draft.intors ? 'rotate(180deg)' : '';
+}
+
+/* =====================================================================
+   INTERFAȚĂ
+   ===================================================================== */
+let toastTimer = 0;
+function toast(text, bad) {
+  const t = $('toast');
+  t.textContent = text; t.className = 'toast show' + (bad ? ' bad' : '');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.className = 'toast'; }, 3200);
+}
+
+function fillSelect(el, opts, labelFn) {
+  const cur = el.value;
+  const want = opts.map(String).join('|');
+  if (el.dataset.opts !== want) {
+    el.innerHTML = '';
+    for (const o of opts) { const op = document.createElement('option'); op.value = o; op.textContent = labelFn ? labelFn(o) : o; el.appendChild(op); }
+    el.dataset.opts = want;
+    el.value = cur;
+  }
+}
+
+function buildStaticControls() {
+  const hours = Array.from({ length: 24 }, (_, i) => String(i));
+  fillSelect($('c_nstart'), hours, h => h.padStart(2, '0') + ':00');
+  fillSelect($('c_nstop'), hours, h => h.padStart(2, '0') + ':00');
+}
+
+function syncControls() {
+  const o = OPTS();
+  fillSelect($('c_colt'), o.colt); fillSelect($('c_jos'), o.jos); fillSelect($('c_indicator'), o.indicator); fillSelect($('c_pagini'), o.pagini);
+  const seg = $('c_format');
+  if (seg.dataset.opts !== o.format.join('|')) {
+    seg.innerHTML = '';
+    for (const f of o.format) { const b = document.createElement('button'); b.type = 'button'; b.dataset.v = f; b.textContent = f; seg.appendChild(b); }
+    seg.dataset.opts = o.format.join('|');
+  }
+  const d = S.draft;
+  const setv = (id, v) => { const el = $(id); if (document.activeElement !== el) el.value = v; };
+  setv('c_titlu', d.titlu); setv('c_colt', d.colt); setv('c_jos', d.jos); setv('c_txtjos', d.txtjos);
+  setv('c_indicator', d.indicator); setv('c_pagini', d.pagini); setv('c_rotire', d.rotire); setv('c_lum', d.lum);
+  setv('c_nstart', String(Math.trunc(d.nstart))); setv('c_nstop', String(Math.trunc(d.nstop))); setv('c_nlum', d.nlum);
+  $('c_intors').checked = !!d.intors; $('c_pornit').checked = !!d.pornit; $('c_noapte').checked = !!d.noapte;
+  for (const b of seg.children) b.setAttribute('aria-pressed', String(b.dataset.v === d.format));
+  $('o_rotire').textContent = d.rotire > 0 ? `la ${d.rotire} s` : 'oprită';
+  $('o_lum').textContent = `${d.lum}%`;
+  $('o_nlum').textContent = d.nlum > 0 ? `${d.nlum}%` : 'stins';
+  $('c_txtjos').closest('.row').style.opacity = optIndex(o, 'jos', d.jos) === 4 ? '1' : '.6';
+  for (const r of document.querySelectorAll('.row[data-key]')) {
+    const k = r.dataset.key;
+    const keys = k === 'nstart' ? ['nstart', 'nstop'] : [k];
+    r.classList.toggle('changed', keys.some(x => !same(S.draft[x], S.applied[x])));
+  }
+  const ch = changedKeys();
+  const bar = $('applyBar');
+  bar.classList.toggle('dirty', ch.length > 0);
+  $('dirtyText').textContent = ch.length === 0 ? 'Previzualizarea arată configurația de pe display.'
+    : ch.length === 1 ? 'O modificare neaplicată.' : `${ch.length} modificări neaplicate.`;
+  $('btnApply').disabled = ch.length === 0 || !S.conn;
+  $('btnRevert').disabled = ch.length === 0;
+
+  const pw = displayPower(d, 'main', new Date());
+  $('nightInfo').textContent = !d.noapte ? 'Modul noapte e dezactivat.'
+    : `Acum e ${pw.noapte ? 'noapte' : 'zi'} pentru display (ora României): ${pw.on ? 'luminozitate ' + pw.lum + '%' : 'display stins'}.`;
+}
+
+function syncLive() {
+  const d = liveData();
+  const fmtT = v => Number.isNaN(v) ? '—' : `${cf(v, 1)} °C`;
+  $('liveTemp').textContent = Number.isNaN(d.t) ? '--.- °C' : `${cf(d.t, 1)} °C`;
+  $('s_temp').textContent = fmtT(num('temp'));
+  $('s_minmax').textContent = Number.isNaN(num('tmin')) ? '—' : `${cf(num('tmin'), 1)} / ${cf(num('tmax'), 1)} °C`;
+  $('s_rez').textContent = Number.isNaN(num('rez')) ? '—' : `${cf(num('rez') / 1000, 2)} kΩ`;
+  $('s_tens').textContent = Number.isNaN(num('tens')) ? '—' : `${cf(num('tens'), 3)} V`;
+  $('s_wifi').textContent = Number.isNaN(num('wifi')) ? '—' : `${cf(num('wifi'), 0)} dBm`;
+  const up = num('uptime');
+  $('s_uptime').textContent = Number.isNaN(up) ? '—'
+    : up >= 86400 ? `${Math.floor(up / 86400)} z ${Math.floor(up % 86400 / 3600)} h`
+    : up >= 3600 ? `${Math.floor(up / 3600)} h ${Math.floor(up % 3600 / 60)} min` : `${Math.floor(up / 60)} min`;
+
+  const chips = [];
+  const chip = (txt, cls) => chips.push(`<span class="pill ${cls}"><span class="dot"></span>${txt}</span>`);
+  if (!st('temp')) chip('Senzorul nu e găsit în HA', 'bad');
+  else if (!has('temp')) chip('Dispozitiv indisponibil', 'bad');
+  if (isOn('defect')) chip('Senzor defect', 'bad');
+  if (isOn('amax')) chip('Alarmă maximă', 'bad');
+  if (isOn('amin')) chip('Alarmă minimă', 'warn');
+  const th = st('termostat');
+  if (th) chip(th.attributes.hvac_action === 'heating' ? 'Releu pornit' : 'Releu oprit', th.attributes.hvac_action === 'heating' ? 'warn' : '');
+  if (isOn('noapteActiv')) chip('Mod noapte activ', '');
+  if (!chips.length || (!isOn('defect') && !isOn('amax') && !isOn('amin') && has('temp'))) chip('Totul în regulă', 'ok');
+  $('statusChips').innerHTML = chips.join('');
+
+  const setv = (id, v) => { const el = $(id); if (document.activeElement !== el) el.value = Number.isNaN(v) ? '' : v; };
+  setv('i_offset', num('offset')); setv('i_pmax', num('pmax')); setv('i_pmin', num('pmin'));
+  $('i_oprire').checked = isOn('oprire');
+  const mode = th ? th.state : '';
+  for (const b of $('i_mode').children) b.setAttribute('aria-pressed', String(b.dataset.v === mode));
+  if (!pendingTarget) $('i_target').textContent = th && Number.isFinite(th.attributes.temperature) ? `${cf(th.attributes.temperature, 1)} °C` : '—';
+  const presets = th && Array.isArray(th.attributes.preset_modes) ? th.attributes.preset_modes : [];
+  fillSelect($('i_preset'), presets);
+  if (th && document.activeElement !== $('i_preset')) $('i_preset').value = th.attributes.preset_mode || '';
+
+  const cur = str('pagina');
+  $('curPage').textContent = cur || '—';
+  const pIdx = cur ? optsOf('pagina').indexOf(cur) : -1;
+  if (settings.follow && pIdx >= 0 && PAGE_KEYS.includes(S.page) && S.page !== PAGE_KEYS[pIdx]) setPage(PAGE_KEYS[pIdx]);
+  $('btnShowPage').disabled = !PAGE_KEYS.includes(S.page) || !S.conn;
+}
+
+function syncConnUi() {
+  const pill = $('connPill'), txt = $('connText');
+  const m = S.conn ? S.conn.mode : null;
+  pill.className = 'pill ' + (m === 'ha' || m === 'token' ? (has('temp') ? 'ok' : 'warn') : m === 'demo' ? 'warn' : 'bad');
+  txt.textContent = m === 'ha' ? 'Home Assistant' : m === 'token' ? 'Home Assistant (token)' : m === 'demo' ? 'Demo' : 'Deconectat';
+  $('demoBanner').hidden = m !== 'demo';
+  $('tokenBox').hidden = m === 'ha';
+  $('btnForget').hidden = m === 'ha';
+  $('connInfo').textContent = m === 'ha' ? 'Conectat prin sesiunea Home Assistant în care e deschisă pagina.'
+    : m === 'token' ? `Conectat la ${settings.url || location.origin} cu token.`
+    : (S.connError ? S.connError + ' ' : '') + 'Deschide pagina din Home Assistant (dashboard de tip „Pagină web”) sau introdu un token.';
+  if (document.activeElement !== $('setDevice')) $('setDevice').value = settings.device;
+  if (document.activeElement !== $('setGraph')) $('setGraph').value = settings.graphMin;
+  if (document.activeElement !== $('setUrl')) $('setUrl').value = settings.url || (m === 'demo' ? '' : location.origin);
+
+  const rows = [];
+  for (const [k, [dom, name]] of Object.entries(ENT)) {
+    const id = S.ids[k] || '';
+    const ok = !!S.states[id];
+    rows.push(`<tr><td>${name}<br><span class="mono" style="color:var(--muted)">${dom}</span></td>
+      <td><input data-map="${k}" value="${id.replace(/"/g, '&quot;')}" aria-label="ID pentru ${name}"></td>
+      <td class="${ok ? 'ok-t' : 'bad-t'}">${ok ? '✓' : '✗ lipsă'}</td></tr>`);
+  }
+  if (document.activeElement && document.activeElement.dataset && document.activeElement.dataset.map) return;
+  $('entRows').innerHTML = rows.join('');
+  const sv = S.services;
+  $('svcInfo').innerHTML = `Acțiuni ESPHome: <span class="mono">${sv.msg ? 'esphome.' + sv.msg : '✗ afiseaza_mesaj lipsă'}</span>, `
+    + `<span class="mono">${sv.clear ? 'esphome.' + sv.clear : '✗ sterge_mesaj lipsă'}</span>, `
+    + `<span class="mono">${sv.test ? 'esphome.' + sv.test : '✗ test_display lipsă'}</span>`;
+}
+
+let uiQueued = false;
+function updateUi() {
+  if (uiQueued) return;
+  uiQueued = true;
+  setTimeout(() => { uiQueued = false; syncControls(); syncLive(); syncConnUi(); paint(); }, 16);
+}
+
+function setPage(p) {
+  S.page = p;
+  for (const b of $('tabs').children) b.setAttribute('aria-pressed', String(b.dataset.page === p));
+  updateUi();
+}
+
+function editDraft(k, v) {
+  S.draft[k] = v;
+  if (same(v, S.applied[k])) S.touched.delete(k); else S.touched.add(k);
+  updateUi();
+}
+
+/* ---------- apeluri către HA ---------- */
+async function callService(domain, service, data, entityId) {
+  if (!S.conn) throw new Error('Nu există conexiune');
+  const msg = { type: 'call_service', domain, service, service_data: data || {} };
+  if (entityId) msg.target = { entity_id: entityId };
+  return S.conn.send(msg);
+}
+async function setEntity(k, v) {
+  const [dom] = ENT[k];
+  const id = S.ids[k];
+  if (!S.states[id]) throw new Error(`Entitatea ${id} nu există în HA`);
+  if (dom === 'text') return callService('text', 'set_value', { value: String(v) }, id);
+  if (dom === 'select') return callService('select', 'select_option', { option: v }, id);
+  if (dom === 'number') return callService('number', 'set_value', { value: Number(v) }, id);
+  if (dom === 'switch') return callService('switch', v ? 'turn_on' : 'turn_off', {}, id);
+  if (dom === 'button') return callService('button', 'press', {}, id);
+  throw new Error('Tip necunoscut: ' + dom);
+}
+async function safe(fn, okText) {
+  try { await fn(); if (okText) toast(okText); }
+  catch (e) { toast((e && e.message) || String(e), true); }
+}
+
+async function applyDraft() {
+  const keys = changedKeys();
+  if (!keys.length) return;
+  $('btnApply').disabled = true;
+  const errors = [];
+  for (const k of keys) {
+    try { await setEntity(k, S.draft[k]); } catch (e) { errors.push(`${ENT[k][1]}: ${e.message || e}`); }
+  }
+  if (errors.length) toast('Nu s-au aplicat: ' + errors.join('; '), true);
+  else toast(keys.length === 1 ? 'Modificarea a fost trimisă la display.' : `${keys.length} modificări trimise la display.`);
+  updateUi();
+}
+
+/* ---------- încărcare date ---------- */
+async function loadHistory() {
+  if (!S.conn || !S.ids.temp) return;
+  try {
+    const end = new Date(), start = new Date(end.getTime() - settings.graphMin * 60000 - 60000);
+    const r = await S.conn.send({ type: 'history/history_during_period', start_time: start.toISOString(), end_time: end.toISOString(),
+      entity_ids: [S.ids.temp], minimal_response: true, no_attributes: true, significant_changes_only: false });
+    const arr = (r && r[S.ids.temp]) || [];
+    S.hist = arr.map(e => {
+      const ts = e.lu !== undefined ? e.lu * 1000 : e.lc !== undefined ? e.lc * 1000 : Date.parse(e.last_updated || e.last_changed);
+      const v = parseFloat(e.s !== undefined ? e.s : e.state);
+      return [ts, Number.isFinite(v) ? v : NaN];
+    }).sort((a, b) => a[0] - b[0]);
+  } catch (e) { /* istoricul e opțional */ }
+  updateUi();
+}
+
+async function loadAll() {
+  const states = await S.conn.send({ type: 'get_states' });
+  S.states = {};
+  for (const s of states) S.states[s.entity_id] = s;
+  resolveIds();
+  try {
+    const sv = await S.conn.send({ type: 'get_services' });
+    const names = Object.keys((sv && sv.esphome) || {});
+    const pick = suf => names.find(n => n === `${slug(settings.device)}_${suf}`) || names.find(n => n.endsWith('_' + suf)) || null;
+    S.services = { msg: pick('afiseaza_mesaj'), clear: pick('sterge_mesaj'), test: pick('test_display') };
+  } catch (e) { S.services = {}; }
+  syncFromStates();
+  updateUi();
+  loadHistory();
+}
+
+function onEvent(ev) {
+  const d = ev && ev.data;
+  if (!d || !d.entity_id) return;
+  if (d.new_state) S.states[d.entity_id] = d.new_state; else delete S.states[d.entity_id];
+  if (!S.idSet || !S.idSet.has(d.entity_id)) return;
+  if (d.entity_id === S.ids.temp && d.new_state) {
+    const v = parseFloat(d.new_state.state);
+    S.hist.push([Date.now(), Number.isFinite(v) ? v : NaN]);
+    const lim = Date.now() - settings.graphMin * 60000 - 120000;
+    while (S.hist.length > 2 && S.hist[1][0] < lim) S.hist.shift();
+  }
+  syncFromStates();
+  updateUi();
+}
+
+async function connect() {
+  S.connError = '';
+  let conn = embeddedConn();
+  if (!conn) {
+    const token = store.get('token', '');
+    if (token) {
+      try {
+        const tc = new TokenConn(settings.url || location.origin, token);
+        await tc.open();
+        tc.onclose = () => { S.conn = null; updateUi(); setTimeout(connect, 5000); };
+        conn = tc;
+      } catch (e) { S.connError = e.message + '.'; }
+    }
+  }
+  if (!conn) conn = new DemoConn(settings.device);
+  S.conn = conn;
+  if (conn.mode === 'ha') {
+    try { const dark = conn.root.hass.themes && conn.root.hass.themes.darkMode; document.documentElement.dataset.theme = dark ? 'dark' : 'light'; } catch (e) { /* tema implicită */ }
+    $('connCard').open = false;
+  }
+  try {
+    await loadAll();
+    await conn.subscribeEvents(onEvent, 'state_changed');
+  } catch (e) {
+    S.connError = 'Eroare: ' + (e.message || e);
+    toast(S.connError, true);
+  }
+  updateUi();
+}
+
+/* ---------- evenimente UI ---------- */
+function bind() {
+  $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setPage(b.dataset.page); });
+  $('optColor').value = settings.color;
+  $('optScenario').value = settings.scenario;
+  $('optFollow').checked = !!settings.follow;
+  $('optColor').addEventListener('change', e => { settings.color = e.target.value; saveSettings(); updateUi(); });
+  $('optScenario').addEventListener('change', e => { settings.scenario = e.target.value; saveSettings(); updateUi(); });
+  $('optFollow').addEventListener('change', e => { settings.follow = e.target.checked; saveSettings(); updateUi(); });
+
+  $('c_titlu').addEventListener('input', e => editDraft('titlu', e.target.value));
+  $('c_txtjos').addEventListener('input', e => editDraft('txtjos', e.target.value));
+  for (const k of ['colt', 'jos', 'indicator', 'pagini']) $('c_' + k).addEventListener('change', e => editDraft(k, e.target.value));
+  $('c_format').addEventListener('click', e => { const b = e.target.closest('button'); if (b) editDraft('format', b.dataset.v); });
+  for (const k of ['rotire', 'lum', 'nlum']) $('c_' + k).addEventListener('input', e => editDraft(k, Number(e.target.value)));
+  for (const k of ['nstart', 'nstop']) $('c_' + k).addEventListener('change', e => editDraft(k, Number(e.target.value)));
+  for (const k of ['intors', 'pornit', 'noapte']) $('c_' + k).addEventListener('change', e => editDraft(k, e.target.checked));
+  $('c_titlu').addEventListener('focus', () => { if (!PAGE_KEYS.includes(S.page)) setPage('main'); });
+  $('c_txtjos').addEventListener('focus', () => { if (S.page !== 'main') setPage('main'); });
+
+  $('btnApply').addEventListener('click', applyDraft);
+  $('btnRevert').addEventListener('click', () => { S.draft = Object.assign({}, S.applied); S.touched.clear(); updateUi(); });
+  $('btnShowPage').addEventListener('click', () => {
+    const idx = PAGE_KEYS.indexOf(S.page);
+    if (idx >= 0) safe(() => setEntity('pagina', optsOf('pagina')[idx]), 'Pagina a fost schimbată pe display.');
+  });
+
+  // mesaj
+  const msgFit = () => {
+    const txt = $('msgText').value.trim();
+    if (!txt || !FONTS) { $('msgFit').textContent = 'Maximum 3 rânduri. Textul se împarte automat pe rânduri.'; $('msgFit').className = 'hint'; return; }
+    const n = wrapMessage(oled, txt).length;
+    $('msgFit').textContent = n <= 3 ? `Încape pe ${n === 1 ? 'un rând' : n + ' rânduri'}.` : `Prea lung: ${n} rânduri, se văd doar primele 3.`;
+    $('msgFit').className = n <= 3 ? 'hint' : 'hint warn';
+  };
+  $('msgText').addEventListener('input', () => { msgFit(); if (S.page !== 'msg') setPage('msg'); else updateUi(); });
+  $('msgChips').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; $('msgText').value = b.textContent; msgFit(); setPage('msg'); });
+  msgFit();
+  $('btnMsgSend').addEventListener('click', () => {
+    const mesaj = $('msgText').value.trim();
+    if (!mesaj) { toast('Scrie întâi un mesaj.', true); return; }
+    if (!S.services.msg) { toast('Acțiunea afiseaza_mesaj nu a fost găsită în HA.', true); return; }
+    const durata = Math.max(1, Math.min(3600, parseInt($('msgDur').value, 10) || 15));
+    safe(() => callService('esphome', S.services.msg, { mesaj, durata }), `Mesaj trimis pentru ${durata} s.`);
+  });
+  $('btnMsgClear').addEventListener('click', () => {
+    if (!S.services.clear) { toast('Acțiunea sterge_mesaj nu a fost găsită în HA.', true); return; }
+    safe(() => callService('esphome', S.services.clear, {}), 'Mesajul a fost șters.');
+  });
+
+  // senzor și termostat (imediat)
+  const numInput = (id, k) => $(id).addEventListener('change', e => {
+    const v = parseFloat(e.target.value);
+    if (!Number.isFinite(v)) return;
+    safe(() => setEntity(k, v), 'Salvat.');
+  });
+  numInput('i_offset', 'offset'); numInput('i_pmax', 'pmax'); numInput('i_pmin', 'pmin');
+  $('i_oprire').addEventListener('change', e => safe(() => setEntity('oprire', e.target.checked)));
+  $('i_mode').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    safe(() => callService('climate', 'set_hvac_mode', { hvac_mode: b.dataset.v }, S.ids.termostat),
+      b.dataset.v === 'off' ? 'Termostat oprit.' : 'Termostat pornit (încălzire).');
+  });
+  const stepTarget = dir => {
+    const th = st('termostat'); if (!th) return;
+    const a = th.attributes, step = a.target_temp_step || 0.5;
+    const base = pendingTarget !== null ? pendingTarget : a.temperature;
+    pendingTarget = Math.min(a.max_temp ?? 100, Math.max(a.min_temp ?? 0, Math.round((base + dir * step) / step) * step));
+    $('i_target').textContent = `${cf(pendingTarget, 1)} °C`;
+    clearTimeout(targetTimer);
+    targetTimer = setTimeout(() => {
+      const t = pendingTarget; pendingTarget = null;
+      safe(() => callService('climate', 'set_temperature', { temperature: t }, S.ids.termostat), `Țintă ${cf(t, 1)} °C.`);
+    }, 700);
+  };
+  $('i_tminus').addEventListener('click', () => stepTarget(-1));
+  $('i_tplus').addEventListener('click', () => stepTarget(1));
+  $('i_preset').addEventListener('change', e => safe(() => callService('climate', 'set_preset_mode', { preset_mode: e.target.value }, S.ids.termostat), 'Preset schimbat.'));
+
+  // unelte
+  $('btnTest').addEventListener('click', () => {
+    if (!S.services.test) { toast('Acțiunea test_display nu a fost găsită în HA.', true); return; }
+    safe(() => callService('esphome', S.services.test, { durata: 3 }), 'Toți pixelii aprinși timp de 3 s.');
+  });
+  $('btnResetMinMax').addEventListener('click', () => safe(() => setEntity('reset', true), 'Minimul și maximul au fost resetate.'));
+  $('btnRestart').addEventListener('click', () => {
+    if (confirm('Repornești ESP32? Releul se oprește cât timp dispozitivul pornește.')) safe(() => setEntity('restart', true), 'ESP32 repornește…');
+  });
+  const presets = () => store.get('presets', {});
+  const listPresets = () => {
+    const p = presets(), el = $('presetList');
+    el.innerHTML = '';
+    const names = Object.keys(p).sort();
+    if (!names.length) { const o = document.createElement('option'); o.textContent = '(niciuna)'; o.value = ''; el.appendChild(o); }
+    for (const n of names) { const o = document.createElement('option'); o.value = n; o.textContent = n; el.appendChild(o); }
+  };
+  listPresets();
+  const loadCfg = cfg => {
+    let n = 0;
+    for (const k of DRAFT_KEYS) if (cfg && k in cfg) { S.draft[k] = typeof DEF_CFG[k] === 'number' ? Number(cfg[k]) : typeof DEF_CFG[k] === 'boolean' ? !!cfg[k] : String(cfg[k]); n++; }
+    for (const k of DRAFT_KEYS) if (!same(S.draft[k], S.applied[k])) S.touched.add(k);
+    setPage(S.page);
+    return n;
+  };
+  $('btnPresetSave').addEventListener('click', () => {
+    const name = $('presetName').value.trim();
+    if (!name) { toast('Dă un nume configurației.', true); return; }
+    const p = presets(); p[name] = Object.assign({}, S.draft); store.set('presets', p);
+    listPresets(); $('presetList').value = name; $('presetName').value = '';
+    toast(`Configurația „${name}” a fost salvată.`);
+  });
+  $('btnPresetLoad').addEventListener('click', () => {
+    const name = $('presetList').value; const p = presets();
+    if (!name || !p[name]) return;
+    loadCfg(p[name]); toast(`„${name}” e încărcată în previzualizare. Apasă „Aplică pe display”.`);
+  });
+  $('btnPresetDel').addEventListener('click', () => {
+    const name = $('presetList').value; const p = presets();
+    if (!name || !p[name] || !confirm(`Ștergi configurația „${name}”?`)) return;
+    delete p[name]; store.set('presets', p); listPresets();
+  });
+  $('btnExport').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify({ tip: 'ntc-display', versiune: 1, config: S.draft }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ntc-display.json';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  $('btnImport').addEventListener('click', () => $('importFile').click());
+  $('importFile').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    try {
+      const j = JSON.parse(await f.text());
+      const n = loadCfg(j.config || j);
+      toast(n ? `Import reușit (${n} setări). Verifică previzualizarea și apasă „Aplică”.` : 'Fișierul nu conține setări cunoscute.', !n);
+    } catch (err) { toast('Fișier JSON invalid.', true); }
+  });
+  $('btnDefaults').addEventListener('click', () => { loadCfg(DEF_CFG); toast('Valorile implicite sunt în previzualizare. Apasă „Aplică” ca să le trimiți.'); });
+
+  // conexiune
+  $('btnGoConn').addEventListener('click', () => { $('connCard').open = true; $('connCard').scrollIntoView({ behavior: 'smooth' }); $('setToken').focus(); });
+  $('btnReconnect').addEventListener('click', () => {
+    settings.device = $('setDevice').value.trim() || 'Senzor NTC';
+    settings.graphMin = Math.max(5, Math.min(1440, parseInt($('setGraph').value, 10) || 60));
+    const url = $('setUrl').value.trim();
+    settings.url = url && url !== location.origin ? url : '';
+    const tok = $('setToken').value.trim();
+    if (tok) store.set('token', tok);
+    $('setToken').value = '';
+    saveSettings();
+    location.reload();
+  });
+  $('btnForget').addEventListener('click', () => { store.del('token'); toast('Token-ul a fost șters din acest browser.'); setTimeout(() => location.reload(), 600); });
+  $('entRows').addEventListener('change', e => {
+    const k = e.target.dataset.map; if (!k) return;
+    const v = e.target.value.trim();
+    const guess = `${ENT[k][0]}.${slug(settings.device)}_${slug(ENT[k][1])}`;
+    if (v && v !== guess) settings.map[k] = v; else delete settings.map[k];
+    saveSettings(); resolveIds(); syncFromStates(); updateUi();
+  });
+
+  new ResizeObserver(() => { fitCanvas(); paint(); }).observe($('oledStage'));
+}
+
+let pendingTarget = null, targetTimer = 0;
+
+if (!FONTS) {
+  document.body.insertAdjacentHTML('afterbegin', '<p style="padding:16px;color:#c62828">Lipsesc fonturile previzualizării. Rulează tools/genereaza-fonturi.py.</p>');
+}
+buildStaticControls();
+bind();
+fitCanvas();
+updateUi();
+setInterval(paint, 250);
+setInterval(loadHistory, 5 * 60 * 1000);
+connect();
+</script>
+</body>
+</html>

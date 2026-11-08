@@ -1,0 +1,14 @@
+{
+  "domain": "casa_3d",
+  "name": "Casa 3D",
+  "codeowners": ["@Dorin-Irimia"],
+  "config_flow": true,
+  "dependencies": ["frontend", "http", "panel_custom", "websocket_api"],
+  "documentation": "https://github.com/Dorin-Irimia/ha-casa-3d",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/Dorin-Irimia/ha-casa-3d/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "1.0.0"
+}
